@@ -11,7 +11,7 @@ import AnalysisTab from './AnalysisTab';
 import { Modal, useToast } from './ui';
 import { importFile, toFountain } from './importer';
 import { exportProject } from './backup';
-import { pickFiles, saveFile } from './native';
+import { openAiSide, pickFiles, saveFile } from './native';
 import { exportScriptPdf } from './pdf';
 import { getLinks, syncProject } from './gsync';
 import { openExternal } from './update';
@@ -96,6 +96,7 @@ export default function Workspace({ id, onClose, settings, setSettings }: { id: 
         </div>
         <div className="grow" />
         {busy && <span className="muted small-t">{busy}</span>}
+        <button className="ghost small" title="ChatGPT를 옆 화면에 열기" onClick={() => openAiSide()}>AI 열기 ◫</button>
         {settings.gsync && <button className="ghost small" title={gs.msg} onClick={() => gsync(true)}>
           {gs.st === 'busy' ? '구글 올리는 중…' : gs.st === 'err' ? '구글 실패 ↻' : gs.at ? `구글 ✓ ${new Date(gs.at).toTimeString().slice(0, 5)}` : '구글에 올리기'}</button>}
         <select value={p.format} onChange={e => update(x => ({ ...x, format: e.target.value as Format }))} title="대본 양식">

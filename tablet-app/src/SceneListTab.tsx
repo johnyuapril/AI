@@ -8,7 +8,7 @@ import type { AICut } from './types';
 import { ANGLES, MOVES, SHOT_SIZES, termLabel } from './shots';
 import { Modal, useToast } from './ui';
 import { toCSV } from './util';
-import { saveFile } from './native';
+import { openAiSide, saveFile } from './native';
 import { cutRows, sceneRows } from './exports';
 
 export default function SceneListTab({ p, update, go }: WsProps) {
@@ -214,6 +214,7 @@ function AiSplitModal({ p, scene, scenes, names, onClose, onApply }: { p: Projec
       </div>}
       <div className="row">
         <b>{scene ? '1.' : '2.'}</b> <button className="primary" onClick={async () => toast(await copyText(request()) ? '복사했어요. 파일을 첨부한 대화창에 붙여 넣으세요.' : '복사하지 못했어요.')}>{scene ? '컷 나누기 요청 복사' : '요청 문장 복사'}</button>
+        <button onClick={() => openAiSide()}>AI 옆 화면에 열기 ◫</button>
         <span className="muted small-t">→ {scene ? '외부 AI에 붙여 넣고 답을 받아요' : '파일과 함께 보내요'}</span>
       </div>
       <div className="row"><b>{scene ? '2.' : '3.'}</b> <button onClick={paste}>AI 답 붙여넣기</button><span className="muted small-t">또는 아래 칸에 직접 붙여넣기 (표로 답해도 돼요)</span></div>

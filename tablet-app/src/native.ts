@@ -2,6 +2,27 @@ import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 import { downloadBlob } from './util';
+import { AppNative } from './plugin';
+
+const mimeOf = (name: string) => /\.pdf$/i.test(name) ? 'application/pdf' : /\.(png)$/i.test(name) ? 'image/png' : /\.(jpe?g)$/i.test(name) ? 'image/jpeg' : /\.(txt|fountain|csv)$/i.test(name) ? 'text/plain' : 'application/octet-stream';
+/** 받는 앱을 옆 화면(분할 화면)에 열고, 안 되면 보통 공유 창 */
+async function shareSide(uri: string, name: string, title: string) {
+  try { await AppNative.shareFile({ uri, mime: mimeOf(name), title }); }
+  catch { try { await Share.share({ title: name, url: uri, dialogTitle: title }); } catch { /* 취소 */ } }
+}
+
+export interface AiApp { id: string; name: string; pkg: string; url: string }
+export const AI_APPS: AiApp[] = [
+  { id: 'chatgpt', name: 'ChatGPT', pkg: 'com.openai.chatgpt', url: 'https://chatgpt.com' },
+  { id: 'gemini', name: 'Gemini', pkg: 'com.google.android.apps.bard', url: 'https://gemini.google.com' },
+  { id: 'claude', name: 'Claude', pkg: 'com.anthropic.claude', url: 'https://claude.ai' },
+];
+/** AI를 옆 화면에 열기 (앱이 없으면 웹) */
+export async function openAiSide(id = 'chatgpt') {
+  const a = AI_APPS.find(x => x.id === id) || AI_APPS[0];
+  if (!isNative()) { window.open(a.url, '_blank'); return; }
+  try { await AppNative.openSide({ pkg: a.pkg, url: a.url }); } catch { window.open(a.url, '_blank'); }
+}
 
 export const isNative = () => Capacitor.isNativePlatform();
 
@@ -21,9 +42,7 @@ export async function saveFile(blob: Blob, name: string, share = true): Promise<
   let r: { uri: string }; let saved = '문서/' + path;
   try { r = await Filesystem.writeFile({ path, data, directory: Directory.Documents, recursive: true }); }
   catch { r = await Filesystem.writeFile({ path: name, data, directory: Directory.Cache }); saved = '공유 창에서 저장할 곳을 골라 주세요'; share = true; }
-  if (share) {
-    try { await Share.share({ title: name, url: r.uri, dialogTitle: '파일 보내기' }); } catch { /* 취소 */ }
-  }
+  if (share) await shareSide(r.uri, name, '파일 보내기');
   return saved;
 }
 
@@ -32,7 +51,7 @@ export async function shareImage(blob: Blob, name: string) {
   if (!isNative()) { downloadBlob(blob, name); return; }
   const data = await blobToBase64(blob);
   const r = await Filesystem.writeFile({ path: name, data, directory: Directory.Cache });
-  await Share.share({ title: name, url: r.uri, dialogTitle: '그림 보내기' });
+  await shareSide(r.uri, name, '그림 보내기');
 }
 
 export function pickFiles(accept: string, multiple = false): Promise<File[]> {

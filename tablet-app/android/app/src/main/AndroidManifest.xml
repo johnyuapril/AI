@@ -36,6 +36,12 @@
         </provider>
     </application>
 
+    <queries>
+        <package android:name="com.openai.chatgpt" />
+        <package android:name="com.google.android.apps.bard" />
+        <package android:name="com.anthropic.claude" />
+    </queries>
+
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />

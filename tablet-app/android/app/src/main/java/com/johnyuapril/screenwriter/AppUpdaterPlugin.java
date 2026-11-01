@@ -71,6 +71,41 @@ public class AppUpdaterPlugin extends Plugin {
         }).start();
     }
 
+    private static final int SIDE = Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT | Intent.FLAG_ACTIVITY_MULTIPLE_TASK;
+
+    /** 파일을 다른 앱으로 보내기. 받는 앱은 옆 화면(분할 화면)에 열림 */
+    @PluginMethod
+    public void shareFile(PluginCall call) {
+        try {
+            String path = call.getString("uri", "");
+            if (path.startsWith("file://")) path = Uri.parse(path).getPath();
+            File f = new File(path);
+            Uri uri = FileProvider.getUriForFile(getContext(), getContext().getPackageName() + ".fileprovider", f);
+            Intent send = new Intent(Intent.ACTION_SEND);
+            send.setType(call.getString("mime", "*/*"));
+            send.putExtra(Intent.EXTRA_STREAM, uri);
+            send.putExtra(Intent.EXTRA_TITLE, f.getName());
+            send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | SIDE);
+            Intent chooser = Intent.createChooser(send, call.getString("title", "보내기"));
+            chooser.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | SIDE);
+            getContext().startActivity(chooser);
+            call.resolve();
+        } catch (Exception e) { call.reject(e.getMessage()); }
+    }
+
+    /** AI 앱(없으면 웹)을 옆 화면에 열기 */
+    @PluginMethod
+    public void openSide(PluginCall call) {
+        try {
+            String pkg = call.getString("pkg", "");
+            Intent i = pkg.isEmpty() ? null : getContext().getPackageManager().getLaunchIntentForPackage(pkg);
+            if (i == null) i = new Intent(Intent.ACTION_VIEW, Uri.parse(call.getString("url", "https://chatgpt.com")));
+            i.addFlags(SIDE);
+            getContext().startActivity(i);
+            call.resolve();
+        } catch (Exception e) { call.reject(e.getMessage()); }
+    }
+
     @PluginMethod
     public void openUrl(PluginCall call) {
         Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(call.getString("url")));

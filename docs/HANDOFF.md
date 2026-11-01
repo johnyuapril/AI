@@ -25,6 +25,8 @@ PC 원본 코드를 쓸 수 없어서 태블릿용으로 새로 만든 첫 버�
 
 - AI로 컷 나누기: 앱의 문장 단위 자동 분할보다 외부 AI(영화감독 역할)가 화면 단위로 더 잘 나눔(부당거래 S#1: 앱 4컷, GPT 7컷). 신 리스트 위 "AI로 전체 컷 나누기"(메시지가 너무 길다는 오류 때문에 시나리오는 .txt 파일로 저장·공유해서 첨부하고, 감독 역할 요청 문장만 복사. 씬 8개씩 답 받고 "다음") 와 씬마다 "AI로 컷 나누기". 답은 [n-k] 형식이나 표 형식 모두 읽음(prompts.ts parseCutSplitAnswer). 저작권 때문에 AI가 원문을 옮기지 않도록 대본 문장에 (1),(2) 번호(sceneUnits 순서)를 붙여 보내고, AI는 '대본 번호'/'대사 번호'만 답함 → 앱이 resolveNumbers 로 원문을 채움. 결과는 SceneMeta.aiCuts 에 저장, getCuts 가 우선 사용(키 `${sceneId}~ai${i}`), 화면 내용은 컷 desc(장면 묘사)로 들어감. AI 컷은 끌어서 합치기만 되고 ✂ 나누기는 없음. "자동으로 다시 나누기"로 되돌림.
 
+- 외부 AI를 옆 화면(분할 화면)에: 공유하면 ChatGPT가 앱 화면을 덮던 문제. AppUpdaterPlugin 에 shareFile/openSide 추가 (FLAG_ACTIVITY_LAUNCH_ADJACENT | NEW_TASK | MULTIPLE_TASK). 파일 보내기·그림 보내기는 모두 이걸로. 상단 "AI 열기 ◫" 버튼, AI 컷 나누기 창에도 버튼. AndroidManifest 에 <queries> (ChatGPT, Gemini, Claude 패키지). 실제 갤럭시 탭에서 분할 화면으로 열리는지는 사용자 확인 필요.
+
 ## APK 빌드
 - main에 push하면 Actions가 빌드해서 Releases에 `Screenwriter-vN.apk`로 올린다.
 - 고정 서명 키: 2026-11-01 태블릿에서 만듦 (release.jks.enc, 비밀값 ANDROID_KEYSTORE_PASSWORD). v9부터 고정 키(CN=Screenwriter, O=johnyuapril). 이후 버전은 덮어 설치되고 앱 안 업데이트 버튼이 동작해야 함. 키를 다시 만들면 앱 재설치가 필요하니 절대 release.jks.enc 를 지우지 말 것.

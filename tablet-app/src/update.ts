@@ -1,12 +1,5 @@
-import { registerPlugin } from '@capacitor/core';
 import { isNative } from './native';
-
-interface AppUpdater {
-  info(): Promise<{ versionName: string; versionCode: number }>;
-  install(o: { url: string }): Promise<void>;
-  openUrl(o: { url: string }): Promise<void>;
-}
-const Updater = registerPlugin<AppUpdater>('AppUpdater');
+import { AppNative as Updater } from './plugin';
 
 const REPO = 'johnyuapril/AI';
 export const RELEASES_PAGE = `https://github.com/${REPO}/releases/latest`;
