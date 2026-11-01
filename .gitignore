@@ -10,3 +10,4 @@ tablet-app/android/local.properties
 # 서명 키는 올리지 않음
 *.jks
 *.keystore
+tablet-app/public/pdfjs/

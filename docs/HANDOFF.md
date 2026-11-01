@@ -11,6 +11,12 @@ PC 원본 코드를 쓸 수 없어서 태블릿용으로 새로 만든 첫 버�
 - 분석: 대사 분량, 씬별 등장인물, 장소 낮/밤, CSV
 - 백업: 작품별 .sbk, 전체 백업 zip, 불러오기
 
+## 최근 변경 (2026-11-01 오후)
+- 한글(HWP) 불러오기 고침: 본문 섹션을 못 찾던 문제. 파일 확장자 대신 파일 내용으로 형식 판단. 배포용/암호 HWP는 안내 메시지.
+- PDF 한글 글꼴(CID) 읽기: pdfjs cMap/표준 글꼴을 빌드 때 public/pdfjs 로 복사(prebuild).
+- 표지(첫 씬 앞 제목·날짜)는 지문으로.
+- 버전 표시와 업데이트: 홈 화면에 버전, "업데이트 확인" 버튼. 새 버전이 있으면 앱 안에서 APK를 받아 설치 화면을 띄움 (android AppUpdaterPlugin.java, src/update.ts). 저장소가 공개여야 동작(비공개면 다운로드 페이지를 엶). 사용자가 공개로 바꾸기로 함.
+
 ## APK 빌드
 - main에 push하면 Actions가 빌드해서 Releases에 `Screenwriter-vN.apk`로 올린다.
 - 고정 키 비밀값(`ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`)이 아직 없다. Claude 세션에서는 비밀값 등록이 막혀 있어서 사용자가 PC에서 직접 넣어야 한다 (docs/SIGNING.md). 그 전까지는 임시 키라 업데이트 때 백업 → 삭제 → 설치 → 복원이 필요하다.

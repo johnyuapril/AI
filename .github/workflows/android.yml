@@ -28,6 +28,8 @@ jobs:
           java-version: 17
       - run: npm ci
       - run: npm run build
+        env:
+          VITE_BUILD: ${{ github.run_number }}
       - run: npx cap sync android
       - name: 서명 키 넣기
         working-directory: tablet-app/android

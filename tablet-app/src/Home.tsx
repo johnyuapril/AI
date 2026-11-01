@@ -5,6 +5,8 @@ import { importFile } from './importer';
 import { exportAll, importBackup } from './backup';
 import { pickFiles, saveFile } from './native';
 import { useToast } from './ui';
+import { currentVersion, installUpdate, latestRelease, openExternal, RELEASES_PAGE, type Latest } from './update';
+import { isNative } from './native';
 
 export default function Home({ onOpen }: { onOpen: (id: string) => void }) {
   const [list, setList] = useState<ProjectSummary[]>([]);
@@ -12,6 +14,28 @@ export default function Home({ onOpen }: { onOpen: (id: string) => void }) {
   const toast = useToast();
   const refresh = () => listProjects().then(setList);
   useEffect(() => { refresh(); }, []);
+  const [ver, setVer] = useState<{ name: string; code: number } | null>(null);
+  const [latest, setLatest] = useState<Latest | null | 'private'>(null);
+  const check = async (manual = false) => {
+    const v = await currentVersion(); setVer(v);
+    try {
+      const l = await latestRelease(); setLatest(l || 'private');
+      if (manual) toast(!l ? '업데이트 정보를 못 가져왔어요. 다운로드 페이지를 열게요.' : l.code > v.code ? `새 버전 v${l.name}이 있어요.` : '지금 최신 버전이에요.');
+      if (manual && !l) openExternal(RELEASES_PAGE);
+    } catch { if (manual) toast('인터넷 연결을 확인해 주세요.'); }
+  };
+  useEffect(() => { check(); }, []);
+  const doUpdate = async (l: Latest) => {
+    if (!isNative()) { openExternal(l.url); return; }
+    setBusy('새 버전 받는 중…');
+    try { await installUpdate(l.url); toast('설치 화면에서 "업데이트"를 눌러 주세요.'); }
+    catch (e: any) {
+      const m = String(e?.message || e);
+      toast(m.includes('NEED_PERMISSION') ? '"이 출처 허용"을 켠 뒤 돌아와서 다시 눌러 주세요.' : m);
+    }
+    setBusy('');
+  };
+  const hasNew = latest && latest !== 'private' && ver && latest.code > ver.code ? latest : null;
 
   const create = async () => { const p = newProject(); await saveProject(p); onOpen(p.id); };
   const importScript = async () => {
@@ -53,8 +77,10 @@ export default function Home({ onOpen }: { onOpen: (id: string) => void }) {
     <div className="app scroll">
       <div className="home">
         <div className="row" style={{ justifyContent: 'space-between' }}>
-          <h1>시나리오 작업실</h1>
+          <h1>시나리오 작업실 <span className="muted" style={{ fontSize: 14, fontWeight: 400 }}>{ver ? (ver.code ? `v${ver.name}` : ver.name) : ''}</span></h1>
           <div className="row">
+            {hasNew ? <button className="primary" onClick={() => doUpdate(hasNew)}>업데이트 v{hasNew.name}</button>
+              : <button onClick={() => check(true)}>업데이트 확인</button>}
             <button onClick={restore}>백업 불러오기</button>
             <button onClick={backupAll}>전체 백업</button>
             <button onClick={importScript}>대본 불러오기</button>

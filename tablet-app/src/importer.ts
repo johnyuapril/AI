@@ -9,12 +9,14 @@ import { looksLikeHeading, stripSceneNumber, TRANSITION_RE } from './script';
 import { parseShotLine } from './shots';
 
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
+const CMAP_URL = new URL('pdfjs/cmaps/', document.baseURI).href;
+const FONT_URL = new URL('pdfjs/standard_fonts/', document.baseURI).href;
 
 interface RawLine { text: string; x?: number; blankBefore?: boolean; side?: [string, string] }
 
 // ---------------- 형식별 글자 꺼내기 ----------------
 async function pdfLines(buf: ArrayBuffer): Promise<RawLine[]> {
-  const doc = await pdfjs.getDocument({ data: new Uint8Array(buf) }).promise;
+  const doc = await pdfjs.getDocument({ data: new Uint8Array(buf), cMapUrl: CMAP_URL, cMapPacked: true, standardFontDataUrl: FONT_URL }).promise;
   const out: RawLine[] = [];
   for (let pn = 1; pn <= doc.numPages; pn++) {
     const page = await doc.getPage(pn);
@@ -78,12 +80,16 @@ function hwpRecordsText(data: Uint8Array): string[] {
 }
 async function hwpLines(buf: ArrayBuffer): Promise<RawLine[]> {
   const cfb = CFB.read(new Uint8Array(buf), { type: 'array' });
-  const header = CFB.find(cfb, 'FileHeader');
-  const flags = header ? new DataView((header.content as any).buffer || new Uint8Array(header.content as any).buffer).getUint32(36, true) : 1;
+  const entry = (re: RegExp) => { const i = cfb.FullPaths.findIndex(p => re.test(p)); return i >= 0 ? cfb.FileIndex[i] : null; };
+  const header = entry(/(^|\/)FileHeader$/);
+  const hb = header ? new Uint8Array(header.content as any) : null;
+  const flags = hb && hb.length >= 40 ? new DataView(hb.buffer, hb.byteOffset, hb.byteLength).getUint32(36, true) : 1;
   const compressed = (flags & 1) === 1;
+  if (flags & 2) throw new Error('암호가 걸린 한글 파일이에요. 한글에서 암호를 풀고 다시 저장해 주세요.');
+  if (flags & 4) throw new Error('배포용 한글 파일은 읽을 수 없어요. 한글에서 "다른 이름으로 저장"으로 일반 문서로 저장하거나 PDF로 저장해 주세요.');
   const out: RawLine[] = [];
-  for (let n = 0; n < 200; n++) {
-    const e = CFB.find(cfb, `BodyText/Section${n}`);
+  for (let n = 0; n < 500; n++) {
+    const e = entry(new RegExp(`(^|/)BodyText/Section${n}$`));
     if (!e) break;
     let data = new Uint8Array(e.content as any);
     if (compressed) { try { data = inflateRaw(data); } catch { data = inflate(data); } }
@@ -209,8 +215,10 @@ export function classify(raw: RawLine[]): { lines: Line[]; format: Format } {
   let colonCount = 0, sideCount = 0, hollywood = 0;
   let mode: 'none' | 'dlg' = 'none';
   let dlgX = -1;
+  const firstScene = raw.findIndex(r => looksLikeHeading(r.text.trim()) || /^(S\s*#|#)\s*\d+/i.test(r.text.trim()));
   for (let i = 0; i < raw.length; i++) {
     const r = raw[i]; const t = r.text.trim();
+    if (firstScene > 0 && i < firstScene) { push('action', t.replace(/\t+/g, ' ')); continue; } // 표지(제목·날짜)는 지문으로
     if (r.blankBefore && mode === 'dlg' && !hasX) mode = 'none';
     if (looksLikeHeading(t) || /^(S\s*#|#)\s*\d+/i.test(t)) {
       if (/^(INT|EXT)/i.test(stripSceneNumber(t))) hollywood++;
@@ -272,8 +280,15 @@ export async function importFile(file: File): Promise<{ lines: Line[]; format: F
     const lines = parseFountain(new TextDecoder().decode(buf));
     return { lines, format: 'ko-stack', title };
   }
+  const head = new Uint8Array(buf.slice(0, 8));
+  const isPdf = head[0] === 0x25 && head[1] === 0x50 && head[2] === 0x44 && head[3] === 0x46;
+  const isCfb = head[0] === 0xd0 && head[1] === 0xcf && head[2] === 0x11 && head[3] === 0xe0;
+  const isZip = head[0] === 0x50 && head[1] === 0x4b;
   let raw: RawLine[];
-  if (ext === 'pdf') raw = await pdfLines(buf);
+  if (isPdf) raw = await pdfLines(buf);
+  else if (isCfb) raw = await hwpLines(buf);
+  else if (isZip) { const z = await JSZip.loadAsync(buf); raw = z.file('word/document.xml') ? await docxLines(buf) : await hwpxLines(buf); }
+  else if (ext === 'pdf') raw = await pdfLines(buf);
   else if (ext === 'hwp') raw = await hwpLines(buf);
   else if (ext === 'hwpx') raw = await hwpxLines(buf);
   else if (ext === 'docx') raw = await docxLines(buf);
@@ -283,7 +298,7 @@ export async function importFile(file: File): Promise<{ lines: Line[]; format: F
     if (/^\s*(Title:|\.[^\s.])/m.test(text) && /^\s*[@!.>]/m.test(text)) return { lines: parseFountain(text), format: 'ko-stack', title };
     raw = textLines(text);
   }
-  if (!raw.length) throw new Error('글자를 찾지 못했어요. 스캔한 이미지 PDF는 불러올 수 없어요.');
+  if (!raw.length) throw new Error('글자를 찾지 못했어요. 스캔한 그림 PDF이거나 지원하지 않는 파일이에요. (PDF, HWP, HWPX, DOCX, TXT, Fountain)');
   const r = classify(raw);
   return { ...r, title };
 }
