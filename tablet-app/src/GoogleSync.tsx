@@ -39,6 +39,7 @@ export default function GoogleSyncModal({ settings, setSettings, onClose }: { se
           <li>권한 허용 창이 나오면 내 계정 선택 → "고급" → "(안전하지 않음)으로 이동" → 허용. (내가 만든 스크립트라 괜찮아요)</li>
           <li>나온 <b>웹 앱 URL</b>을 복사해서 아래에 붙여넣고 "연결".</li>
         </ol>
+        <p className="small-t" style={{ margin: 0 }}><b>코드를 새로 붙여넣었을 때</b>(앱이 "예전 버전"이라고 할 때): 편집기에 새 코드를 붙여넣고 저장 → <b>배포 → 배포 관리 → 연필(✏️) → 버전: 새 버전 → 배포</b>. 주소는 그대로라 앱에서 바꿀 건 없어요.</p>
         <input value={url} onChange={e => setUrl(e.target.value)} placeholder="https://script.google.com/macros/s/…/exec" style={{ width: '100%', fontSize: 15 }} />
         <label className="row" style={{ gap: 8 }}><input type="checkbox" checked={auto} onChange={e => setAuto(e.target.checked)} style={{ width: 22, height: 22 }} /> 고칠 때마다 자동으로 올리기 (마지막으로 고친 뒤 1분 쯤 지나서, 그리고 작품을 닫을 때)</label>
         <div className="row" style={{ justifyContent: 'flex-end' }}>

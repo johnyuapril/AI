@@ -2,14 +2,15 @@
 // 앱의 "구글 연결" 창에서 "코드 복사"를 누르면 KEY가 채워진 이 코드가 복사돼요.
 const KEY = '__KEY__';
 const FOLDER = '시나리오 작업실';
+const VERSION = 2;
 
-function doGet() { return out({ ok: true, app: 'screenwriter-sync' }); }
+function doGet() { return out({ ok: true, app: 'screenwriter-sync', version: VERSION }); }
 
 function doPost(e) {
   try {
     const d = JSON.parse(e.postData.contents);
     if (KEY && d.key !== KEY) return out({ ok: false, error: '비밀 키가 맞지 않아요' });
-    if (d.ping) return out({ ok: true });
+    if (d.ping) return out({ ok: true, version: VERSION });
     const folder = projectFolder(d.title);
     const props = PropertiesService.getScriptProperties();
     const ids = JSON.parse(props.getProperty('p:' + d.id) || '{}');
@@ -29,10 +30,16 @@ function doPost(e) {
     scriptDoc.setName(d.title + ' - 대본'); descDoc.setName(d.title + ' - 장면 묘사'); ss.rename(d.title + ' - 신 리스트');
     const now = { script: scriptDoc.getId(), desc: descDoc.getId(), sheet: ss.getId() };
     props.setProperty('p:' + d.id, JSON.stringify(now));
-    return out({ ok: true, script: scriptDoc.getUrl(), desc: descDoc.getUrl(), sheet: ss.getUrl() });
+    return out({ ok: true, version: VERSION, script: scriptDoc.getUrl(), desc: descDoc.getUrl(), sheet: ss.getUrl() });
   } catch (err) {
     return out({ ok: false, error: String(err) });
   }
+}
+
+// 문서를 비운 뒤 첫 문단 (없으면 새로 만듦)
+function firstPara(body) {
+  const ps = body.getParagraphs();
+  return ps.length ? ps[0] : body.appendParagraph('');
 }
 
 function out(o) { return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); }
@@ -59,18 +66,23 @@ function openOrCreateSheet(id, name, folder) {
 function writeScript(doc, title, paras) {
   const body = doc.getBody();
   body.clear();
-  body.setMarginLeft(56).setMarginRight(56);
-  const h = body.getParagraphs()[0];
-  h.setText(title).setHeading(DocumentApp.ParagraphHeading.TITLE).setAlignment(DocumentApp.HorizontalAlignment.CENTER);
+  body.setMarginLeft(56); body.setMarginRight(56);
+  const h = firstPara(body);
+  h.setText(title);
+  h.setHeading(DocumentApp.ParagraphHeading.TITLE);
+  h.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
   const A = DocumentApp.HorizontalAlignment;
   paras.forEach(function (x) {
     const p = body.appendParagraph(x.text || ' ');
-    p.setHeading(DocumentApp.ParagraphHeading.NORMAL).setIndentStart(0).setIndentFirstLine(0).setAlignment(A.LEFT).setSpacingBefore(0).setSpacingAfter(4);
-    const t = p.editAsText(); t.setBold(false).setItalic(false).setFontSize(11);
-    if (x.t === 'scene') { t.setBold(true).setFontSize(12); p.setSpacingBefore(18); }
-    else if (x.t === 'character') { t.setBold(true); p.setIndentStart(150).setIndentFirstLine(150).setSpacingBefore(8).setSpacingAfter(0); }
-    else if (x.t === 'dialogue') { p.setIndentStart(80).setIndentFirstLine(80).setIndentEnd(80); }
-    else if (x.t === 'paren') { t.setItalic(true); p.setIndentStart(115).setIndentFirstLine(115).setSpacingAfter(0); }
+    p.setHeading(DocumentApp.ParagraphHeading.NORMAL);
+    p.setIndentStart(0); p.setIndentFirstLine(0); p.setIndentEnd(0);
+    p.setAlignment(A.LEFT); p.setSpacingBefore(0); p.setSpacingAfter(4);
+    const t = p.editAsText();
+    t.setBold(false); t.setItalic(false); t.setFontSize(11);
+    if (x.t === 'scene') { t.setBold(true); t.setFontSize(12); p.setSpacingBefore(18); }
+    else if (x.t === 'character') { t.setBold(true); p.setIndentStart(150); p.setIndentFirstLine(150); p.setSpacingBefore(8); p.setSpacingAfter(0); }
+    else if (x.t === 'dialogue') { p.setIndentStart(80); p.setIndentFirstLine(80); p.setIndentEnd(80); }
+    else if (x.t === 'paren') { t.setItalic(true); p.setIndentStart(115); p.setIndentFirstLine(115); p.setSpacingAfter(0); }
     else if (x.t === 'transition') { p.setAlignment(A.RIGHT); }
     else if (x.t === 'shot') { t.setBold(true); }
   });
@@ -79,7 +91,9 @@ function writeScript(doc, title, paras) {
 function writeLines(doc, title, lines) {
   const body = doc.getBody();
   body.clear();
-  body.getParagraphs()[0].setText(title).setHeading(DocumentApp.ParagraphHeading.TITLE);
+  const h = firstPara(body);
+  h.setText(title);
+  h.setHeading(DocumentApp.ParagraphHeading.TITLE);
   lines.forEach(function (l) {
     const p = body.appendParagraph(l || ' ');
     p.setHeading(/^S#\d+/.test(l) ? DocumentApp.ParagraphHeading.HEADING2 : DocumentApp.ParagraphHeading.NORMAL);
@@ -92,7 +106,9 @@ function writeTab(ss, name, rows) {
   if (!rows || !rows.length) return;
   const w = Math.max.apply(null, rows.map(function (r) { return r.length; }));
   const data = rows.map(function (r) { const a = r.map(function (v) { return v === null || v === undefined ? '' : v; }); while (a.length < w) a.push(''); return a; });
-  sh.getRange(1, 1, data.length, w).setValues(data).setWrap(true).setVerticalAlignment('top');
-  sh.getRange(1, 1, 1, w).setFontWeight('bold').setBackground('#f1f1ee');
+  const rg = sh.getRange(1, 1, data.length, w);
+  rg.setValues(data); rg.setWrap(true); rg.setVerticalAlignment('top');
+  const hd = sh.getRange(1, 1, 1, w);
+  hd.setFontWeight('bold'); hd.setBackground('#f1f1ee');
   sh.setFrozenRows(1);
 }

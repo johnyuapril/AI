@@ -2,6 +2,8 @@ import type { GSync, Project } from './types';
 import { cutRows, describeRows, describeText, sceneRows, scriptParas } from './exports';
 import code from './google-sync.gs.txt?raw';
 
+export const CODE_VERSION = 2;
+const OLD = '구글 쪽 코드가 예전 버전이에요. 앱의 "구글 연결" 창에서 코드를 다시 복사해 붙여넣고, 배포 → 배포 관리 → 연필 → 버전: 새 버전 → 배포를 눌러 주세요.';
 export const scriptCode = (key: string) => code.replace('__KEY__', key);
 export const newKey = () => Array.from(crypto.getRandomValues(new Uint8Array(12)), b => b.toString(16).padStart(2, '0')).join('');
 
@@ -20,6 +22,7 @@ async function post(g: GSync, body: object): Promise<any> {
   const text = await r.text();
   let j: any; try { j = JSON.parse(text); } catch { throw new Error(r.status === 200 ? '연결 주소가 맞는지 확인해 주세요 (웹 앱 주소, 액세스: 모든 사용자).' : `구글 응답 오류 ${r.status}`); }
   if (!j.ok) throw new Error(j.error || '구글 저장 실패');
+  if (!j.version || j.version < CODE_VERSION) throw new Error(OLD);
   return j;
 }
 
