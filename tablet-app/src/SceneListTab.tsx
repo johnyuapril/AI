@@ -1,7 +1,10 @@
 import { useMemo, useRef, useState } from 'react';
 import type { WsProps } from './Workspace';
 import type { Project } from './types';
-import { autoSummary, cutValues, estimatePages, getCuts, getScenes, knownNames, mergeCuts, resetBreaks, sceneStats, splitAt, type Cut, type Scene } from './script';
+import { applyAiCuts, autoSummary, cutValues, estimatePages, getCuts, getScenes, isAiScene, knownNames, mergeCuts, resetBreaks, sceneStats, splitAt, type Cut, type Scene } from './script';
+import { buildCutSplitRequest, buildFullCutSplitRequest, parseCutSplitAnswer } from './prompts';
+import { copyText } from './util';
+import type { AICut } from './types';
 import { ANGLES, MOVES, SHOT_SIZES, termLabel } from './shots';
 import { Modal, useToast } from './ui';
 import { toCSV } from './util';
@@ -15,6 +18,7 @@ export default function SceneListTab({ p, update, go }: WsProps) {
   const allCuts = useMemo(() => new Map(scenes.map(s => [s.id, getCuts(p, s, names)])), [scenes, p.scenes, names]);
   const [open, setOpen] = useState<Set<string>>(new Set());
   const [filter, setFilter] = useState('');
+  const [allAi, setAllAi] = useState(false);
   const toggle = (id: string) => setOpen(o => { const n = new Set(o); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const setMeta = (sid: string, k: 'summary' | 'notes', v: string) => update(x => ({ ...x, scenes: { ...x.scenes, [sid]: { ...x.scenes[sid], [k]: v } } }));
 
@@ -30,6 +34,7 @@ export default function SceneListTab({ p, update, go }: WsProps) {
         <button onClick={() => setOpen(new Set(scenes.map(s => s.id)))}>모두 펼치기</button>
         <button onClick={() => setOpen(new Set())}>모두 접기</button>
         <div className="grow" />
+        <button className="primary" onClick={() => setAllAi(true)}>AI로 전체 컷 나누기</button>
         <button onClick={exportScenes}>신 리스트 CSV</button>
         <button onClick={exportCuts}>컷 리스트 CSV</button>
         <button className="primary" onClick={() => go('board')}>스토리보드로 →</button>
@@ -60,6 +65,7 @@ export default function SceneListTab({ p, update, go }: WsProps) {
           })}
         </tbody>
       </table>
+      {allAi && <AiSplitModal p={p} scenes={scenes} names={names} onClose={() => setAllAi(false)} onApply={g => update(x => g.reduce((acc, [sc, list]) => applyAiCuts(acc, sc, list), x))} />}
     </div></div>
   );
 }
@@ -71,6 +77,8 @@ function CutBoard({ p, update, scene, cuts, names }: { p: Project; update: WsPro
   const sceneChars = useMemo(() => sceneStats(scene, names).chars, [scene, names]);
   const setCut = (key: string, patch: Record<string, unknown>) => update(x => ({ ...x, cuts: { ...x.cuts, [key]: { ...x.cuts[key], ...patch } } }));
   const manual = !!(p.scenes[scene.id]?.breaks?.length || p.scenes[scene.id]?.noBreaks?.length);
+  const ai = isAiScene(p, scene);
+  const [aiOpen, setAiOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
   const findOver = (x: number, y: number) => {
     const el = document.elementFromPoint(x, y)?.closest('[data-cut]') as HTMLElement | null;
@@ -79,8 +87,12 @@ function CutBoard({ p, update, scene, cuts, names }: { p: Project; update: WsPro
   return <div ref={box}>
     <div className="row" style={{ margin: '4px 0 10px' }}>
       <b>S#{scene.num} 컷 {cuts.length}개</b>
-      {manual && <button className="small" onClick={() => update(x => resetBreaks(x, scene))}>자동으로 다시 나누기</button>}
+      {ai && <span className="chip on">AI가 나눈 컷</span>}
+      {(manual || ai) && <button className="small" onClick={() => { if (!ai || confirm('AI가 나눈 컷을 버리고 앱이 자동으로 다시 나눌까요? (이 컷들에 넣은 그림·묘사는 연결이 끊겨요)')) update(x => resetBreaks(x, scene)); }}>자동으로 다시 나누기</button>}
+      <div className="grow" />
+      <button className="small primary" onClick={() => setAiOpen(true)}>AI로 컷 나누기</button>
     </div>
+    {aiOpen && <AiSplitModal p={p} scene={scene} scenes={[scene]} names={names} onClose={() => setAiOpen(false)} onApply={g => update(x => g.reduce((acc, [sc, list]) => applyAiCuts(acc, sc, list), x))} />}
     <div className="cuts">
       {cuts.map((c, i) => {
         const v = cutValues(p, c); const m = p.cuts[c.key] || {};
@@ -95,7 +107,7 @@ function CutBoard({ p, update, scene, cuts, names }: { p: Project; update: WsPro
             <span className="muted small-t">{c.seconds}초</span>
             <div className="grow" />
             <button className={'small' + (m.chars ? ' tag-manual' : '')} onClick={() => setCharEdit(c)}>👥 {v.chars.length ? v.chars.join(', ') : '인물 없음'}</button>
-            <button className="small" onClick={() => setSplit(c)}>✂</button>
+            {!ai && <button className="small" onClick={() => setSplit(c)}>✂</button>}
           </div>
           <div className="row" style={{ gap: 4, marginTop: 6 }}>
             <TermSel list={SHOT_SIZES} value={m.shot} auto={c.auto.shot} src={c.auto.src} onChange={x => setCut(c.key, { shot: x })} short />
@@ -103,7 +115,9 @@ function CutBoard({ p, update, scene, cuts, names }: { p: Project; update: WsPro
             <TermSel list={MOVES} value={m.move} auto={c.auto.move} src={c.auto.src} onChange={x => setCut(c.key, { move: x })} />
           </div>
           {c.units.some(u => u.kind === 'shot') && <div className="small-t" style={{ color: 'var(--blue)', fontWeight: 700, marginTop: 4 }}>{c.units.find(u => u.kind === 'shot')!.text}</div>}
-          {c.action && <div className="txt">{c.action}</div>}
+          {ai && c.auto.note && <div className="small-t" style={{ color: 'var(--blue)', fontWeight: 700, marginTop: 4 }}>{c.auto.note}</div>}
+          {ai && p.cuts[c.key]?.desc && <div className="txt"><b>화면</b> {p.cuts[c.key]!.desc}</div>}
+          {c.action && <div className={ai ? 'txt muted small-t' : 'txt'}>{ai ? '대본: ' : ''}{c.action}</div>}
           {c.dialogues.map((d, k) => <div key={k} className="dl"><b>{d.speaker}{d.off ? '(소리)' : ''}</b> {d.text.length > 80 ? d.text.slice(0, 78) + '…' : d.text}</div>)}
           {i === 0 && cuts.length > 1 && <div className="muted small-t" style={{ marginTop: 4 }}>⠿를 끌어 다른 컷에 놓으면 합쳐져요</div>}
         </div>;
@@ -157,4 +171,64 @@ export function CharPick({ all, value, manual, onClose, onSave, label }: { all: 
       <button className="primary" onClick={() => { onSave(sel); onClose(); }}>저장</button>
     </div>
   </Modal>;
+}
+
+function AiSplitModal({ p, scene, scenes, names, onClose, onApply }: { p: Project; scene?: Scene; scenes: Scene[]; names: string[]; onClose: () => void; onApply: (byScene: [Scene, AICut[]][]) => void }) {
+  const toast = useToast();
+  const [text, setText] = useState('');
+  const [done, setDone] = useState<number[]>([]);
+  const parsed = useMemo(() => text.trim() ? parseCutSplitAnswer(text, names) : [], [text, names]);
+  const groups = useMemo(() => {
+    const out: [Scene, AICut[]][] = [];
+    for (const s of scene ? [scene] : scenes) {
+      const list = parsed.filter(c => c.scene === s.num || (scene && !c.scene)).map(({ scene: _x, ...c }) => c);
+      if (list.length && list.every(c => !c.dlg?.length)) {
+        // 표처럼 대사 칸이 없는 답: 씬의 대사를 마지막 컷에 붙임
+        const dl = sceneDialogues(s);
+        if (dl.length) list[list.length - 1] = { ...list[list.length - 1], dlg: dl };
+      }
+      if (list.length) out.push([s, list]);
+    }
+    return out;
+  }, [parsed, scene, scenes]);
+  const total = groups.reduce((a, g) => a + g[1].length, 0);
+  const paste = async () => {
+    try { const t = await navigator.clipboard.readText(); if (t) { setText(t); return; } } catch { /* */ }
+    toast('아래 칸을 길게 눌러 붙여넣기 해 주세요.');
+  };
+  const request = () => scene ? buildCutSplitRequest(p, scene) : buildFullCutSplitRequest(p, scenes);
+  const apply = () => {
+    onApply(groups);
+    const nums = groups.map(g => g[0].num);
+    toast(`S#${nums[0]}${nums.length > 1 ? '~' + nums[nums.length - 1] : ''} 씬 ${nums.length}개를 ${total}컷으로 나눴어요.`);
+    if (scene) { onClose(); return; }
+    setDone(d => [...new Set([...d, ...nums])].sort((x, y) => x - y)); setText('');
+  };
+  const left = scenes.filter(s => !done.includes(s.num));
+  return <Modal wide title={scene ? `S#${scene.num} AI로 컷 나누기` : 'AI로 전체 컷 나누기 (영화감독 역할)'} onClose={onClose}>
+    <div style={{ display: 'grid', gap: 10 }}>
+      {!scene && <p className="muted small-t" style={{ margin: 0 }}>시나리오 전체를 주고 "영화감독"으로서 모든 씬을 컷으로 나누게 해요. 답이 길어서 씬 8개씩 받아요. 답을 붙여 넣고 "바꾸기"를 누른 뒤, AI에게 <b>"다음"</b>이라고 보내서 이어지는 답을 또 붙여 넣으면 돼요.</p>}
+      <div className="row">
+        <b>1.</b> <button className="primary" onClick={async () => toast(await copyText(request()) ? '복사했어요. ChatGPT 등에 붙여 넣으세요.' : '복사하지 못했어요.')}>{scene ? '컷 나누기 요청 복사' : '시나리오 전체 + 요청 복사'}</button>
+        <span className="muted small-t">→ 외부 AI에 붙여 넣고 답을 받아요</span>
+      </div>
+      <div className="row"><b>2.</b> <button onClick={paste}>AI 답 붙여넣기</button><span className="muted small-t">또는 아래 칸에 직접 붙여넣기 (표로 답해도 돼요)</span></div>
+      <textarea value={text} onChange={e => setText(e.target.value)} rows={10} style={{ width: '100%', fontSize: 14 }} placeholder={`[${scene?.num ?? 1}-1] EWS / 하이앵글 / 고정\n대본: …\n화면: …\n인물: 없음`} />
+      {text.trim() && <div className="small-t">{total ? <>읽은 결과: {groups.map(g => `S#${g[0].num} ${g[1].length}컷`).join(', ').slice(0, 400)}</> : <span style={{ color: 'var(--accent)' }}>컷을 찾지 못했어요. [1-1] 같은 컷 번호가 있는지 확인해 주세요.</span>}</div>}
+      {!scene && done.length > 0 && <div className="small-t">바꾼 씬 {done.length}개 / 전체 {scenes.length}개{left.length ? ` · 다음은 S#${left[0].num}부터예요. AI에게 "다음"이라고 보내 주세요.` : ' · 모두 끝났어요!'}</div>}
+      <div className="row" style={{ justifyContent: 'flex-end' }}>
+        <button className="primary" disabled={!total} onClick={apply}>이 컷들로 바꾸기</button>
+      </div>
+    </div>
+  </Modal>;
+}
+
+function sceneDialogues(s: Scene): { speaker: string; text: string; off: boolean }[] {
+  const out: { speaker: string; text: string; off: boolean }[] = []; let sp = ''; let off = false;
+  for (const l of s.lines) {
+    if (l.t === 'character') { sp = l.text.replace(/\s*\(.*?\)\s*/g, '').trim(); off = /소리|V\.?O|O\.?S/i.test(l.text); }
+    else if (l.t === 'dialogue') out.push({ speaker: sp, text: l.text, off });
+    else if (l.t !== 'paren') sp = '';
+  }
+  return out;
 }

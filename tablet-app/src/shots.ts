@@ -33,7 +33,7 @@ export const ANGLES: Term[] = [
   { code: 'Hip', label: '허리 높이', aliases: ['Hip Level', '허리 높이'] },
   { code: 'Knee', label: '무릎 높이', aliases: ['Knee Level', '무릎 높이'] },
   { code: 'Ground', label: '바닥 높이', aliases: ['Ground Level', '바닥 높이', '로우 포지션'] },
-  { code: 'Aerial', label: '항공', aliases: ['Aerial', '항공샷', '항공 샷'] },
+  { code: 'Aerial', label: '항공', aliases: ['Aerial', '항공샷', '항공 샷', '항공촬영', '항공 촬영', '드론'] },
   { code: 'Profile', label: '측면', aliases: ['Profile', '측면', '옆모습'] },
   { code: 'Back', label: '뒷모습', aliases: ['Back Shot', '뒷모습', '백샷'] },
 ];

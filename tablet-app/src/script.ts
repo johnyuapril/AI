@@ -1,4 +1,4 @@
-import type { Line, LineType, Project } from './types';
+import type { AICut, CutMeta, Line, LineType, Project } from './types';
 import { parseShotLine, type ShotInfo } from './shots';
 import { countMentions } from './util';
 
@@ -110,7 +110,7 @@ export interface Unit {
 export interface Cut {
   key: string; sceneId: string; no: number; label: string; units: Unit[];
   action: string; dialogues: { speaker: string; text: string; off: boolean; paren?: string }[];
-  auto: { shot?: string; angle?: string; move?: string; chars: string[]; src: string };
+  auto: { shot?: string; angle?: string; move?: string; chars: string[]; src: string; note?: string };
   seconds: number;
 }
 
@@ -194,9 +194,10 @@ const CROWD = /관객|사람들|군중|무리|명의|명이|들이 |인파|학�
 
 export function getCuts(p: Project, scene: Scene, names?: string[]): Cut[] {
   const nm = names || knownNames(p);
+  const meta = p.scenes[scene.id];
+  if (meta?.aiCuts?.length) return aiCutsToCuts(scene, meta.aiCuts, nm);
   const units = sceneUnits(scene);
   if (!units.length) return [];
-  const meta = p.scenes[scene.id];
   const breaks = autoBreaks(units, nm);
   for (const x of meta?.breaks || []) breaks.add(x);
   for (const x of meta?.noBreaks || []) breaks.delete(x);
@@ -250,12 +251,38 @@ export function getCuts(p: Project, scene: Scene, names?: string[]): Cut[] {
   });
 }
 
+/** 외부 AI가 나눈 컷 → 앱의 컷 */
+export const aiKey = (sceneId: string, i: number) => `${sceneId}~ai${i}`;
+function aiCutsToCuts(scene: Scene, list: AICut[], names: string[]): Cut[] {
+  return list.map((a, i) => {
+    const dialogues = (a.dlg || []).map(d => ({ speaker: d.speaker, text: d.text, off: d.off }));
+    const chars = a.chars ?? names.filter(n => countMentions(a.see + ' ' + a.src, n) > 0);
+    const dlgLen = dialogues.reduce((x, d) => x + d.text.length, 0);
+    return {
+      key: aiKey(scene.id, i), sceneId: scene.id, no: i + 1, label: `${scene.num}-${i + 1}`,
+      units: [], action: a.src || a.see, dialogues,
+      auto: { shot: a.shot, angle: a.angle, move: a.move, chars, src: 'AI', note: a.cam },
+      seconds: Math.max(2, Math.round((a.src || a.see).length / 14 + dlgLen / 7)),
+    };
+  });
+}
+export function isAiScene(p: Project, scene: Scene) { return !!p.scenes[scene.id]?.aiCuts?.length; }
+
 /** 컷 합치기/나누기 */
 export function mergeCuts(p: Project, scene: Scene, aKey: string, bKey: string): Project {
   const cuts = getCuts(p, scene);
   const ia = cuts.findIndex(c => c.key === aKey), ib = cuts.findIndex(c => c.key === bKey);
   if (ia < 0 || ib < 0 || ia === ib) return p;
   const [lo, hi] = ia < ib ? [ia, ib] : [ib, ia];
+  const ai = p.scenes[scene.id]?.aiCuts;
+  if (ai?.length) {
+    const keep = ai[lo];
+    const merged: AICut = { ...keep, src: ai.slice(lo, hi + 1).map(x => x.src).filter(Boolean).join(' '), see: ai.slice(lo, hi + 1).map(x => x.see).filter(Boolean).join(' '), dlg: ai.slice(lo, hi + 1).flatMap(x => x.dlg || []) };
+    const next = [...ai.slice(0, lo), merged, ...ai.slice(hi + 1)];
+    const om = ai.map((_, i) => p.cuts[aiKey(scene.id, i)]);
+    const metas = [...om.slice(0, lo), { ...om[lo], desc: merged.see || om[lo]?.desc }, ...om.slice(hi + 1)];
+    return applyAiCuts(p, scene, next, metas);
+  }
   const auto = autoBreaks(sceneUnits(scene), knownNames(p));
   const m = { ...(p.scenes[scene.id] || {}) };
   const add = new Set(m.breaks || []); const rm = new Set(m.noBreaks || []);
@@ -270,8 +297,20 @@ export function splitAt(p: Project, scene: Scene, unitIds: string[]): Project {
   m.breaks = [...add]; m.noBreaks = [...rm];
   return { ...p, scenes: { ...p.scenes, [scene.id]: m } };
 }
+/** AI 컷 목록을 씬에 넣기. 예전 AI 컷의 그림·묘사 등은 지움 */
+export function applyAiCuts(p: Project, scene: Scene, list: AICut[], metas?: (CutMeta | undefined)[]): Project {
+  const cuts = { ...p.cuts };
+  const old = p.scenes[scene.id]?.aiCuts?.length || 0;
+  for (let i = 0; i < Math.max(old, list.length); i++) {
+    const k = aiKey(scene.id, i);
+    if (i < list.length) cuts[k] = metas ? { ...(metas[i] || {}) } : { desc: list[i].see || undefined };
+    else delete cuts[k];
+  }
+  const m = { ...(p.scenes[scene.id] || {}), aiCuts: list };
+  return { ...p, cuts, scenes: { ...p.scenes, [scene.id]: m } };
+}
 export function resetBreaks(p: Project, scene: Scene): Project {
-  const m = { ...(p.scenes[scene.id] || {}) }; delete m.breaks; delete m.noBreaks;
+  const m = { ...(p.scenes[scene.id] || {}) }; delete m.breaks; delete m.noBreaks; delete m.aiCuts;
   return { ...p, scenes: { ...p.scenes, [scene.id]: m } };
 }
 

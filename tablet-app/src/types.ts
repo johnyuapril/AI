@@ -22,6 +22,14 @@ export interface SceneMeta {
   setTable?: string;  // 씬 설정표
   corr?: string;      // 씬 바로잡기
   common?: string;    // 그림 공통(마스터 샷) 직접 고친 값
+  aiCuts?: AICut[];   // 외부 AI가 나눈 컷 (있으면 자동 나누기 대신 씀)
+}
+export interface AICut {
+  shot?: string; angle?: string; move?: string; cam?: string;
+  src: string;        // 이 컷에 해당하는 대본 부분
+  see: string;        // 화면 핵심
+  chars?: string[];
+  dlg?: { speaker: string; text: string; off: boolean }[];
 }
 export interface Project {
   id: string; title: string; team: string; format: Format;
