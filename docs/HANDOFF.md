@@ -22,7 +22,7 @@ PC 원본 코드를 쓸 수 없어서 태블릿용으로 새로 만든 첫 버�
 
 ## APK 빌드
 - main에 push하면 Actions가 빌드해서 Releases에 `Screenwriter-vN.apk`로 올린다.
-- 고정 서명 키: 아직 없음. 태블릿에서 할 수 있는 방법을 만들어 둠 (docs/SIGNING.md: 비밀값 ANDROID_KEYSTORE_PASSWORD 하나 + "서명 키 만들기" 워크플로 실행 → 암호화된 release.jks.enc 를 저장소에 올림). 그 전까지는 임시 키라 업데이트 때 백업 → 삭제 → 설치 → 복원.
+- 고정 서명 키: 2026-11-01 태블릿에서 만듦 (release.jks.enc, 비밀값 ANDROID_KEYSTORE_PASSWORD). v9부터 고정 키(CN=Screenwriter, O=johnyuapril). 이후 버전은 덮어 설치되고 앱 안 업데이트 버튼이 동작해야 함. 키를 다시 만들면 앱 재설치가 필요하니 절대 release.jks.enc 를 지우지 말 것.
 
 ## 다음에 할 일 / 알려진 한계
 - PC 버전의 "다운로드 폴더 자동 감시"는 없다 (대신 여러 장 한꺼번에 넣기).
