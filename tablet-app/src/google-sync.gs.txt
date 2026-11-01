@@ -2,10 +2,11 @@
 // 앱의 "구글 연결" 창에서 "코드 복사"를 누르면 KEY가 채워진 이 코드가 복사돼요.
 const KEY = '__KEY__';
 const FOLDER = '시나리오 작업실';
-const VERSION = 3;
+const VERSION = 4;
 
 function doGet() { return out({ ok: true, app: 'screenwriter-sync', version: VERSION }); }
 
+let STEP = '시작';
 function doPost(e) {
   try {
     const d = JSON.parse(e.postData.contents);
@@ -15,23 +16,48 @@ function doPost(e) {
     const props = PropertiesService.getScriptProperties();
     const ids = JSON.parse(props.getProperty('p:' + d.id) || '{}');
 
-    const scriptDoc = openOrCreateDoc(ids.script, d.title + ' - 대본', folder);
-    writeScript(scriptDoc, d.title, d.script);
-    const descDoc = openOrCreateDoc(ids.desc, d.title + ' - 장면 묘사', folder);
-    writeLines(descDoc, d.title + ' 장면 묘사', d.describeText);
-    const ss = openOrCreateSheet(ids.sheet, d.title + ' - 신 리스트', folder);
-    writeSceneList(ss, d.tree);
-    writeDescribe(ss, d.tree);
-    ['컷 리스트', 'Sheet1', '시트1'].forEach(function (n) { const x = ss.getSheetByName(n); if (x && ss.getSheets().length > 1) ss.deleteSheet(x); });
-    ss.setActiveSheet(ss.getSheetByName('신 리스트')); ss.moveActiveSheet(1);
+    const save = function () { props.setProperty('p:' + d.id, JSON.stringify(ids)); };
+    const hash = function (x) { return Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, JSON.stringify(x), Utilities.Charset.UTF_8)); };
 
-    // 제목이 바뀌었으면 파일 이름도 맞추기
-    scriptDoc.setName(d.title + ' - 대본'); descDoc.setName(d.title + ' - 장면 묘사'); ss.rename(d.title + ' - 신 리스트');
-    const now = { script: scriptDoc.getId(), desc: descDoc.getId(), sheet: ss.getId() };
-    props.setProperty('p:' + d.id, JSON.stringify(now));
-    return out({ ok: true, version: VERSION, script: scriptDoc.getUrl(), desc: descDoc.getUrl(), sheet: ss.getUrl() });
+    // 바뀐 것만 다시 씀 (시간 아끼기). 한 단계씩 저장해서 중간에 멈춰도 다음에 이어서 함
+    STEP = '대본 문서';
+    const scriptDoc = openOrCreateDoc(ids.script, d.title + ' - 대본', folder);
+    if (ids.script !== scriptDoc.getId()) { ids.script = scriptDoc.getId(); ids.hScript = ''; }
+    scriptDoc.setName(d.title + ' - 대본');
+    const scriptUrl = scriptDoc.getUrl();
+    const hs = hash([d.title, d.script]);
+    if (ids.hScript !== hs) { writeScript(scriptDoc, d.title, d.script); ids.hScript = hs; }
+    save();
+
+    STEP = '장면 묘사 문서';
+    const descDoc = openOrCreateDoc(ids.desc, d.title + ' - 장면 묘사', folder);
+    if (ids.desc !== descDoc.getId()) { ids.desc = descDoc.getId(); ids.hDesc = ''; }
+    descDoc.setName(d.title + ' - 장면 묘사');
+    const descUrl = descDoc.getUrl();
+    const hd = hash([d.title, d.describeText]);
+    if (ids.hDesc !== hd) { writeLines(descDoc, d.title + ' 장면 묘사', d.describeText); ids.hDesc = hd; }
+    save();
+
+    STEP = '스프레드시트';
+    const ss = openOrCreateSheet(ids.sheet, d.title + ' - 신 리스트', folder);
+    if (ids.sheet !== ss.getId()) { ids.sheet = ss.getId(); ids.hSheet = ''; }
+    ss.rename(d.title + ' - 신 리스트');
+    const hh = hash([VERSION, d.tree]);
+    if (ids.hSheet !== hh) {
+      STEP = '신 리스트 탭';
+      writeSceneList(ss, d.tree);
+      STEP = '장면 묘사 탭';
+      writeDescribe(ss, d.tree);
+      STEP = '마무리';
+      ['컷 리스트', 'Sheet1', '시트1'].forEach(function (n) { const x = ss.getSheetByName(n); if (x && ss.getSheets().length > 1) ss.deleteSheet(x); });
+      ss.setActiveSheet(ss.getSheetByName('신 리스트')); ss.moveActiveSheet(1);
+      SpreadsheetApp.flush();
+      ids.hSheet = hh;
+    }
+    save();
+    return out({ ok: true, version: VERSION, script: scriptUrl, desc: descUrl, sheet: ss.getUrl() });
   } catch (err) {
-    return out({ ok: false, error: String(err) });
+    return out({ ok: false, error: '[' + STEP + '] ' + String(err) });
   }
 }
 
@@ -102,6 +128,8 @@ function writeLines(doc, title, lines) {
 // 시트를 새로 만들어 바꿔 끼움 (예전 묶음·서식이 남지 않게)
 function freshSheet(ss, name) {
   const old = ss.getSheetByName(name);
+  const left = ss.getSheetByName(name + ' (새로)'); // 지난번에 중간에 멈췄을 때 남은 것
+  if (left) ss.deleteSheet(left);
   const tmp = ss.insertSheet(name + ' (새로)');
   if (old) ss.deleteSheet(old);
   tmp.setName(name);
