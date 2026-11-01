@@ -87,7 +87,7 @@ export default function StoryboardTab(props: WsProps) {
 
   const Video = ({ r, w }: { r: Row; w: number }) => (
     <div className="sb-video" style={{ width: w, height: Math.round(w / ratio) }} onClick={() => setEditImg(r)}>
-      {r.meta.img ? <Img id={r.meta.img} /> : <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#bbb', fontSize: 12 }}>눌러서 그림 넣기</span>}
+      {r.meta.img ? <Img id={r.meta.img} /> : !busy && <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#bbb', fontSize: 12 }}>눌러서 그림 넣기</span>}
     </div>
   );
   const Head = ({ i, scene }: { i: number; scene: Scene }) => (

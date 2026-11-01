@@ -190,6 +190,7 @@ export function toFountain(title: string, lines: Line[]): string {
 }
 
 // ---------------- 줄 분류 ----------------
+const baseName = (t: string) => t.replace(/\s*[(（][^)）]*[)）]\s*$/, '').trim();
 const NAME_COLON = /^([가-힣A-Za-z0-9·\s]{1,12}?)\s*[:：]\s*(.+)$/;
 
 export function classify(raw: RawLine[]): { lines: Line[]; format: Format } {
@@ -199,12 +200,12 @@ export function classify(raw: RawLine[]): { lines: Line[]; format: Format } {
   const freq = new Map<string, number>();
   for (const r of raw) {
     const t = r.text.trim();
-    if (t.length <= 10 && !/[.!?…,"'“”]$/.test(t) && !looksLikeHeading(t) && !TRANSITION_RE.test(t)) freq.set(t, (freq.get(t) || 0) + 1);
+    if (t.length <= 14 && !/[.!?…,"'“”]$/.test(t) && !looksLikeHeading(t) && !TRANSITION_RE.test(t)) { const b = baseName(t); freq.set(b, (freq.get(b) || 0) + 1); }
     const m = r.text.match(NAME_COLON); if (m && m[1].trim().length <= 8) freq.set('§' + m[1].trim(), (freq.get('§' + m[1].trim()) || 0) + 1);
   }
   const xs = raw.map(r => r.x).filter((x): x is number => x !== undefined);
   const margin = xs.length ? xs.sort((a, b) => a - b)[Math.floor(xs.length * 0.1)] : 0;
-  const hasX = xs.length > raw.length * 0.5;
+  const hasX = xs.length > raw.length * 0.5 && xs[xs.length - 1] - xs[0] > 4;
   let colonCount = 0, sideCount = 0, hollywood = 0;
   let mode: 'none' | 'dlg' = 'none';
   let dlgX = -1;
@@ -236,8 +237,10 @@ export function classify(raw: RawLine[]): { lines: Line[]; format: Format } {
     if (shot && t.length < 60 && (shot.shot || shot.angle) ) { push('shot', t); mode = 'none'; continue; }
     const next = raw[i + 1];
     const indented = hasX && r.x !== undefined && r.x > margin + 40;
-    const nameLike = t.length <= 10 && !/[.!?…,"'“”~]$/.test(t) && (freq.get(t) || 0) >= 2 && !!next;
-    if (nameLike && (!hasX || indented || (freq.get(t) || 0) >= 3)) {
+    const fq = freq.get(baseName(t)) || 0;
+    const shortName = baseName(t).length <= 8 && !/\s/.test(baseName(t)) && !/[.!?…,"'“”~다요]$/.test(baseName(t));
+    const nameLike = t.length <= 14 && !/[.!?…,"'“”~]$/.test(t) && !!next && (fq >= 2 || (shortName && !hasX && !next.blankBefore && (r.blankBefore || i === 0)));
+    if (nameLike && (!hasX || indented || fq >= 3)) {
       push('character', t); mode = 'dlg'; dlgX = next?.x ?? -1; continue;
     }
     if (mode === 'dlg') {

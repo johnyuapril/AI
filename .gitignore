@@ -6,3 +6,7 @@ tablet-app/android/app/build/
 tablet-app/android/build/
 tablet-app/android/.gradle/
 tablet-app/android/local.properties
+
+# 서명 키는 올리지 않음
+*.jks
+*.keystore

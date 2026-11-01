@@ -213,7 +213,7 @@ export default function ScriptTab({ p, update, focusScene, go }: WsProps) {
           </div>
         </div>
         <div className="elembar" onPointerDown={e => e.preventDefault()}>
-          <button className="small" onClick={() => setSideOpen(o => !o)}>{sideOpen ? '◧' : '☰'}</button>
+          <button className="small" onClick={() => setSideOpen(o => !o)}>{sideOpen ? '목록 닫기' : '목록'}</button>
           {TYPE_ORDER.map((t, k) => <button key={t} className={curLine?.t === t ? 'on' : ''} onClick={() => setType(focusIdx, t)} title={`Ctrl+${k + 1}`}>{TYPE_LABEL[t]}</button>)}
           <button onClick={insertSoftBreak} title="Shift+Enter">줄바꿈</button>
           <button onClick={newSceneBelow}>+ 새 씬</button>
