@@ -1,0 +1,8 @@
+node_modules/
+dist/
+*.log
+.DS_Store
+tablet-app/android/app/build/
+tablet-app/android/build/
+tablet-app/android/.gradle/
+tablet-app/android/local.properties
