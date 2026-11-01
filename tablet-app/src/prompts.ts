@@ -132,12 +132,20 @@ const DIRECTOR_RULES = [
   '- 대사·소리는 그게 들리는 동안 화면에 보이는 컷에 번호로 넣어.',
   '- 샷 크기는 EWS, WS, FS, MS, MCU, CU, ECU, OTS, 2S 중에서, 앵글과 카메라 움직임은 한국어로 써.',
   '- 컷 번호는 [씬번호-컷번호] 로. (예: [12-3] 은 12번 씬의 세 번째 컷)',
+  '- 장면 묘사도 같이 해 줘. 씬마다 컷보다 먼저 [설정표 씬번호]에 씬 내내 변하지 않는 장소 모습, 시간·날씨·조명, 인물별 생김새·옷차림·소지품을 정리해.',
+  '- 컷의 "화면"은 카메라로 바라봤을 때 보이는 것만 사실적이고 자세하게 2~4문장으로. 감정, 냄새, 소리, 비유는 쓰지 마.',
+  '- 화면에 나오는 사람마다 위치와 방향, 고개, 팔과 손, 다리, 얼굴(보이는지, 표정)을 쓰고, 누가 누구의 어디를 어떻게 잡는지 같은 접촉과 동작을 구체적으로. 설정표의 옷차림·소품을 지켜.',
 ];
 const ANSWER_FORMAT = (n: number) => [
-  '[답하는 형식] 표로 쓰지 말고, 컷마다 아래 모양 그대로. 다른 말은 붙이지 마.',
+  '[답하는 형식] 표로 쓰지 말고, 씬마다 설정표 다음에 컷을 아래 모양 그대로. 다른 말은 붙이지 마.',
+  `[설정표 ${n}]`,
+  '장소: …',
+  '시간·날씨·조명: …',
+  '인물: 이름 - 생김새, 옷차림, 소지품 (한 사람씩 한 줄)',
+  '',
   `[${n}-1] 샷 크기 / 앵글 / 카메라 움직임`,
   '대본 번호: 이 컷에 해당하는 지문 번호 (예: 1 또는 2-3)',
-  '화면: 이 컷 화면에 보이는 것을 네 말로 짧게 (한 순간, 구체적으로)',
+  '화면: 이 컷 한 순간에 화면에 보이는 것을 네 말로 자세히 (장면 묘사)',
   '인물: 화면에 나오는 인물 이름 (없으면 없음)',
   '대사 번호: 이 컷에 들리는 대사 번호 (없으면 없음)',
   '',
@@ -229,6 +237,7 @@ export function parseCutSplitAnswer(text: string, names: string[]): ParsedCut[] 
     const l = stripMd(raw);
     const m = l.match(/^\[?\s*S?#?\s*\d+\s*-\s*\d+\s*\]?\s*[.:)]?\s*(.*)$/);
     if (m && /^\[?\s*S?#?\s*\d+\s*-\s*\d+/.test(l)) { cur = { scene: sceneOf(l), ...cam(m[1] || ''), src: '', see: '', dlg: [] }; out.push(cur); field = ''; continue; }
+    if (/^\[?\s*설정표/.test(l)) { cur = null; field = ''; continue; }
     if (!cur || !l) continue;
     const f = l.match(/^(대본\s*번호|대사\s*번호|대본|화면|인물|대사|소리|카메라)\s*[:：]\s*(.*)$/);
     if (f) {
@@ -247,6 +256,21 @@ export function parseCutSplitAnswer(text: string, names: string[]): ParsedCut[] 
     else if (field === '대사' || field === '소리') cur.dlg!.push(...parseDlg(l));
   }
   void names;
+  return out;
+}
+/** 답 속 [설정표 n] → 씬 번호별 설정표 */
+export function parseSetTables(text: string): Record<number, string> {
+  const lines = unescapeMd(text.replace(/\r/g, '')).split('\n');
+  const out: Record<number, string> = {}; let cur = 0; let buf: string[] = [];
+  const flush = () => { if (cur && buf.join('').trim()) out[cur] = buf.join('\n').trim(); buf = []; };
+  for (const raw of lines) {
+    const l = stripMd(raw);
+    const m = l.match(/^\[?\s*설정표\s*S?#?\s*(\d+)?\s*\]?\s*[:：]?\s*(.*)$/);
+    if (m) { flush(); cur = Number(m[1]) || -1; if (m[2]) buf.push(m[2]); continue; }
+    if (/^\[?\s*S?#?\s*\d+\s*-\s*\d+/.test(l)) { flush(); cur = 0; continue; }
+    if (cur) buf.push(l);
+  }
+  flush();
   return out;
 }
 function nums(v: string): number[] {

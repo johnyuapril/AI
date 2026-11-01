@@ -298,7 +298,7 @@ export function splitAt(p: Project, scene: Scene, unitIds: string[]): Project {
   return { ...p, scenes: { ...p.scenes, [scene.id]: m } };
 }
 /** AI 컷 목록을 씬에 넣기. 예전 AI 컷의 그림·묘사 등은 지움 */
-export function applyAiCuts(p: Project, scene: Scene, list: AICut[], metas?: (CutMeta | undefined)[]): Project {
+export function applyAiCuts(p: Project, scene: Scene, list: AICut[], metas?: (CutMeta | undefined)[], setTable?: string): Project {
   const cuts = { ...p.cuts };
   const old = p.scenes[scene.id]?.aiCuts?.length || 0;
   for (let i = 0; i < Math.max(old, list.length); i++) {
@@ -306,7 +306,7 @@ export function applyAiCuts(p: Project, scene: Scene, list: AICut[], metas?: (Cu
     if (i < list.length) cuts[k] = metas ? { ...(metas[i] || {}) } : { desc: list[i].see || undefined };
     else delete cuts[k];
   }
-  const m = { ...(p.scenes[scene.id] || {}), aiCuts: list };
+  const m = { ...(p.scenes[scene.id] || {}), aiCuts: list, ...(setTable ? { setTable } : {}) };
   return { ...p, cuts, scenes: { ...p.scenes, [scene.id]: m } };
 }
 export function resetBreaks(p: Project, scene: Scene): Project {

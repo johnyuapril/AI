@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 import type { WsProps } from './Workspace';
 import type { Project } from './types';
 import { applyAiCuts, autoSummary, cutValues, estimatePages, getCuts, getScenes, isAiScene, knownNames, mergeCuts, resetBreaks, sceneStats, splitAt, type Cut, type Scene } from './script';
-import { buildCutSplitRequest, buildFullCutSplitRequest, fullScriptText, parseCutSplitAnswer, resolveNumbers, scriptFileName } from './prompts';
+import { buildCutSplitRequest, buildFullCutSplitRequest, fullScriptText, parseCutSplitAnswer, parseSetTables, resolveNumbers, scriptFileName } from './prompts';
 import { copyText } from './util';
 import type { AICut } from './types';
 import { ANGLES, MOVES, SHOT_SIZES, termLabel } from './shots';
@@ -65,7 +65,7 @@ export default function SceneListTab({ p, update, go }: WsProps) {
           })}
         </tbody>
       </table>
-      {allAi && <AiSplitModal p={p} scenes={scenes} names={names} onClose={() => setAllAi(false)} onApply={g => update(x => g.reduce((acc, [sc, list]) => applyAiCuts(acc, sc, list), x))} />}
+      {allAi && <AiSplitModal p={p} scenes={scenes} names={names} onClose={() => setAllAi(false)} onApply={g => update(x => g.reduce((acc, [sc, list, st]) => applyAiCuts(acc, sc, list, undefined, st), x))} />}
     </div></div>
   );
 }
@@ -92,7 +92,7 @@ function CutBoard({ p, update, scene, cuts, names }: { p: Project; update: WsPro
       <div className="grow" />
       <button className="small primary" onClick={() => setAiOpen(true)}>AI로 컷 나누기</button>
     </div>
-    {aiOpen && <AiSplitModal p={p} scene={scene} scenes={[scene]} names={names} onClose={() => setAiOpen(false)} onApply={g => update(x => g.reduce((acc, [sc, list]) => applyAiCuts(acc, sc, list), x))} />}
+    {aiOpen && <AiSplitModal p={p} scene={scene} scenes={[scene]} names={names} onClose={() => setAiOpen(false)} onApply={g => update(x => g.reduce((acc, [sc, list, st]) => applyAiCuts(acc, sc, list, undefined, st), x))} />}
     <div className="cuts">
       {cuts.map((c, i) => {
         const v = cutValues(p, c); const m = p.cuts[c.key] || {};
@@ -173,13 +173,14 @@ export function CharPick({ all, value, manual, onClose, onSave, label }: { all: 
   </Modal>;
 }
 
-function AiSplitModal({ p, scene, scenes, names, onClose, onApply }: { p: Project; scene?: Scene; scenes: Scene[]; names: string[]; onClose: () => void; onApply: (byScene: [Scene, AICut[]][]) => void }) {
+function AiSplitModal({ p, scene, scenes, names, onClose, onApply }: { p: Project; scene?: Scene; scenes: Scene[]; names: string[]; onClose: () => void; onApply: (byScene: [Scene, AICut[], string?][]) => void }) {
   const toast = useToast();
   const [text, setText] = useState('');
   const [done, setDone] = useState<number[]>([]);
   const parsed = useMemo(() => text.trim() ? parseCutSplitAnswer(text, names) : [], [text, names]);
+  const sets = useMemo(() => text.trim() ? parseSetTables(text) : {}, [text]);
   const groups = useMemo(() => {
-    const out: [Scene, AICut[]][] = [];
+    const out: [Scene, AICut[], string?][] = [];
     for (const s of scene ? [scene] : scenes) {
       const list = parsed.filter(c => c.scene === s.num || (scene && !c.scene)).map(c => resolveNumbers(c, s));
       if (list.length && list.every(c => !c.dlg?.length)) {
@@ -187,10 +188,10 @@ function AiSplitModal({ p, scene, scenes, names, onClose, onApply }: { p: Projec
         const dl = sceneDialogues(s);
         if (dl.length) list[list.length - 1] = { ...list[list.length - 1], dlg: dl };
       }
-      if (list.length) out.push([s, list]);
+      if (list.length) out.push([s, list, sets[s.num] || (scene ? sets[-1] : undefined)]);
     }
     return out;
-  }, [parsed, scene, scenes]);
+  }, [parsed, sets, scene, scenes]);
   const total = groups.reduce((a, g) => a + g[1].length, 0);
   const paste = async () => {
     try { const t = await navigator.clipboard.readText(); if (t) { setText(t); return; } } catch { /* */ }
@@ -210,7 +211,7 @@ function AiSplitModal({ p, scene, scenes, names, onClose, onApply }: { p: Projec
   const left = scenes.filter(s => !done.includes(s.num));
   return <Modal wide title={scene ? `S#${scene.num} AI로 컷 나누기` : 'AI로 전체 컷 나누기 (영화감독 역할)'} onClose={onClose}>
     <div style={{ display: 'grid', gap: 10 }}>
-      {!scene && <p className="muted small-t" style={{ margin: 0 }}>시나리오 전체를 파일로 주고 "영화감독"으로서 모든 씬을 컷으로 나누게 해요. AI가 <b>한 번에 쓸 수 있는 답의 길이</b>에 한계가 있어서(씬 100개면 컷이 600~700개) 나눠 받는 게 안전해요. 나눠 받을 때는 답을 붙여 넣고 "바꾸기" → AI에게 <b>"다음"</b> → 또 붙여넣기.</p>}
+      {!scene && <p className="muted small-t" style={{ margin: 0 }}>시나리오 전체를 파일로 주고 "영화감독"으로서 모든 씬을 컷으로 나누게 해요. <b>장면 묘사(설정표와 컷 화면 묘사)도 같이 받아서</b> 장면 묘사 탭에 바로 들어가요. AI가 <b>한 번에 쓸 수 있는 답의 길이</b>에 한계가 있어서(씬 100개면 컷이 600~700개) 나눠 받는 게 안전해요. 나눠 받을 때는 답을 붙여 넣고 "바꾸기" → AI에게 <b>"다음"</b> → 또 붙여넣기.</p>}
       {!scene && <div className="row"><span className="small-t">한 번에 받을 씬</span>
         {[8, 15, 30].map(n => <button key={n} className={'small' + (per === n ? ' primary' : '')} onClick={() => setPerSave(n)}>{n}개씩</button>)}
         <button className={'small' + (per >= 9999 ? ' primary' : '')} onClick={() => setPerSave(9999)}>전체 (파일로 받기)</button>
@@ -226,7 +227,7 @@ function AiSplitModal({ p, scene, scenes, names, onClose, onApply }: { p: Projec
       </div>
       <div className="row"><b>{scene ? '2.' : '3.'}</b> <button onClick={paste}>AI 답 붙여넣기</button><button onClick={loadFile}>답 파일 불러오기</button><span className="muted small-t">또는 아래 칸에 직접 붙여넣기 (표로 답해도 돼요)</span></div>
       <textarea value={text} onChange={e => setText(e.target.value)} rows={10} style={{ width: '100%', fontSize: 14 }} placeholder={`[${scene?.num ?? 1}-1] EWS / 하이앵글 / 고정\n대본 번호: 1\n화면: …\n인물: 없음\n대사 번호: 없음`} />
-      {text.trim() && <div className="small-t">{total ? <>읽은 결과: {groups.map(g => `S#${g[0].num} ${g[1].length}컷`).join(', ').slice(0, 400)}</> : <span style={{ color: 'var(--accent)' }}>컷을 찾지 못했어요. [1-1] 같은 컷 번호가 있는지 확인해 주세요.</span>}</div>}
+      {text.trim() && <div className="small-t">{total ? <>읽은 결과: {groups.map(g => `S#${g[0].num} ${g[1].length}컷${g[2] ? '+설정표' : ''}`).join(', ').slice(0, 400)}</> : <span style={{ color: 'var(--accent)' }}>컷을 찾지 못했어요. [1-1] 같은 컷 번호가 있는지 확인해 주세요.</span>}</div>}
       {!scene && done.length > 0 && <div className="small-t">바꾼 씬 {done.length}개 / 전체 {scenes.length}개{left.length ? ` · 다음은 S#${left[0].num}부터예요. AI에게 "다음"이라고 보내 주세요.` : ' · 모두 끝났어요!'}</div>}
       <div className="row" style={{ justifyContent: 'flex-end' }}>
         <button className="primary" disabled={!total} onClick={apply}>이 컷들로 바꾸기</button>

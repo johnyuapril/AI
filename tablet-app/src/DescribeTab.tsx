@@ -24,7 +24,7 @@ export default function DescribeTab(props: WsProps) {
     <div className="page"><div className="page-inner">
       <div className="toolbar">
         <b>장면 묘사</b>
-        <span className="muted small-t">씬마다 "외부 AI용 복사" → ChatGPT 등에 붙여 넣기 → 받은 답을 "답 넣기"에 붙여 넣으면 컷마다 나뉘어 들어가요.</span>
+        <span className="muted small-t">신 리스트의 "AI로 전체 컷 나누기"를 하면 묘사가 같이 들어와요. 마음에 안 드는 씬만 "외부 AI용 복사"로 다시 받으세요.</span>
         <div className="grow" />
         <button onClick={() => setShowInst(s => !s)}>내 지시문 {showInst ? '접기' : '보기'}</button>
         <button onClick={exportTxt}>문서로 내보내기</button>

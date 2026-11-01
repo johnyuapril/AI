@@ -29,6 +29,7 @@ PC 원본 코드를 쓸 수 없어서 태블릿용으로 새로 만든 첫 버�
 
 - 붙여넣기 백슬래시: ChatGPT 답을 복사하면 `\[1-1\]`처럼 마크다운 이스케이프가 붙어 컷 번호를 못 읽던 문제. util.ts unescapeMd 로 붙여넣기(cleanPasted)와 parseCutSplitAnswer 에서 지움.
 - AI 컷 나누기 묶음 크기: 8/15/30/전체 고르기(localStorage 'ai-split-per'). 묶음은 입력이 아니라 AI 답 길이 제한 때문. '전체'는 AI에게 컷나누기.txt 파일로 답하라고 요청하고, 창의 '답 파일 불러오기'로 읽음.
+- 컷 나누기 + 장면 묘사 한 번에: 사용자가 컷 나누기 → 장면 묘사 씬마다 복사·붙여넣기가 번거롭다고 함. AI 컷 나누기 요청(DIRECTOR_RULES/ANSWER_FORMAT)에 씬마다 [설정표 n]과 자세한 '화면' 묘사 규칙을 넣음. parseSetTables 가 설정표를 읽어 applyAiCuts(…, setTable)로 씬 설정표에, 화면은 컷 desc로. 장면 묘사 탭의 씬별 복사는 다시 받을 때만 쓰면 됨. 답이 길어져서 묶음은 8씬 권장.
 
 ## APK 빌드
 - main에 push하면 Actions가 빌드해서 Releases에 `Screenwriter-vN.apk`로 올린다.
