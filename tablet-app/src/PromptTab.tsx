@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import type { WsProps } from './Workspace';
 import type { Project } from './types';
 import { getCuts, getScenes, knownNames, type Cut, type Scene } from './script';
-import { autoCommon, autoCutPrompt, commonFor, cutPromptFor, fullCutPrompt, masterPrompt, sceneGuide } from './prompts';
+import { autoCommon, autoCutPrompt, commonFor, cutPromptFor, fullCutPrompt, masterPrompt, sceneAllGuide, sceneGuide } from './prompts';
 import { Img, LazyText, Lightbox, useToast } from './ui';
 import { copyText } from './util';
 import { pickFiles, shareImage } from './native';
@@ -85,7 +85,7 @@ function ScenePrompts({ p, update, settings, scene, names, open, onToggle, onBig
     toast(ok ? `${c.label} 복사됨 → 외부 AI에 붙여 넣으세요` : '복사하지 못했어요.');
   };
   const copyAll = async () => {
-    const parts = [sceneGuide(), '', commonFor(p, scene, settings), ''];
+    const parts = [sceneAllGuide(cuts.length), '', commonFor(p, scene, settings), ''];
     cuts.forEach((c, i) => parts.push(cutPromptFor(p, scene, c, cuts[i - 1]), ''));
     const ok = await copyText(parts.join('\n'));
     update(x => { const nc = { ...x.cuts }; for (const c of cuts) if (!nc[c.key]?.img) nc[c.key] = { ...nc[c.key], wait: true }; return { ...x, cuts: nc }; });

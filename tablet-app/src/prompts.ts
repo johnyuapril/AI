@@ -1,6 +1,6 @@
 import type { Project, Settings } from './types';
 import { type Cut, type Scene, cutValues, isNightTime } from './script';
-import { ANGLES, MOVES, termLabel } from './shots';
+import { SHOT_SIZES, ANGLES, MOVES, termLabel } from './shots';
 import { cleanPasted } from './util';
 
 function sceneScript(scene: Scene): string {
@@ -82,7 +82,7 @@ export function commonFor(p: Project, scene: Scene, s: Settings): string {
 export function autoCutPrompt(p: Project, scene: Scene, cut: Cut, prev?: Cut): string {
   const v = cutValues(p, cut);
   const m = p.cuts[cut.key] || {};
-  const cam = [v.shot, v.angle && termLabel(ANGLES, v.angle), v.move && termLabel(MOVES, v.move)].filter(Boolean).join(' · ');
+  const cam = [v.shot && termLabel(SHOT_SIZES, v.shot), v.angle && termLabel(ANGLES, v.angle), v.move && termLabel(MOVES, v.move)].filter(Boolean).join(' · ');
   const lines = [`[컷 ${cut.label}]`];
   if (cam) lines.push('카메라: ' + cam);
   lines.push('화면에 나오는 인물: ' + (v.chars.length ? v.chars.join(', ') : '없음 (사람을 그리지 말 것)'));
@@ -96,7 +96,9 @@ export function autoCutPrompt(p: Project, scene: Scene, cut: Cut, prev?: Cut): s
     const pd = (p.cuts[prev.key]?.desc || prev.action || '').trim();
     if (pd) lines.push(`앞 컷(${prev.label})과 이어짐: ${pd.length > 90 ? pd.slice(0, 88) + '…' : pd}`);
   }
-  if (!/차렷|정면을 (바라|보)/.test(see)) lines.push('인물은 차렷 자세로 정면을 보지 말고, 상황에 맞는 동작 중인 자세로.');
+  if (v.move) lines.push('카메라 움직임은 화살표로 그리지 말고, 움직임이 시작되는 한 순간의 화면으로.');
+  if (v.chars.length && !/차렷|정면을 (바라|보)/.test(see)) lines.push('인물은 차렷 자세로 정면을 보지 말고, 상황에 맞는 동작 중인 자세로.');
+  lines.push(ONE_CUT_RULE);
   return lines.join('\n');
 }
 export function cutPromptFor(p: Project, scene: Scene, cut: Cut, prev?: Cut): string {
@@ -105,8 +107,14 @@ export function cutPromptFor(p: Project, scene: Scene, cut: Cut, prev?: Cut): st
 export function fullCutPrompt(p: Project, scene: Scene, cut: Cut, prev: Cut | undefined, s: Settings): string {
   return commonFor(p, scene, s) + '\n\n' + cutPromptFor(p, scene, cut, prev);
 }
+export const ONE_CUT_RULE = '⚠ 이 컷 하나만, 한 순간을 그림 한 장(한 칸)에 그려 줘. 칸을 나누거나 여러 컷·여러 장면을 한 장에 넣지 말 것. 다음 컷을 미리 그리지 말 것.';
+/** 첫 컷 앞에 붙는 안내 */
 export function sceneGuide(): string {
-  return '이 대화에서 아래 스토리보드 컷들을 순서대로 한 장씩 그릴 거야. 모든 컷에서 장소, 인물의 생김새와 옷을 똑같이 유지해 줘.';
+  return '이 대화에서 스토리보드 컷을 한 번에 하나씩 따로 요청할 거야. 매번 요청한 그 컷 하나만 그림 한 장으로 그려 줘. 앞으로 요청할 모든 컷에서 장소, 인물의 생김새와 옷을 똑같이 유지해 줘.';
+}
+/** 씬 전체를 한꺼번에 붙여 넣을 때 안내 */
+export function sceneAllGuide(n: number): string {
+  return `아래는 스토리보드 ${n}컷이야. 한 번에 한 컷씩, 컷마다 따로 그림 한 장으로 그려 줘. 지금은 첫 번째 컷만 그리고, 내가 "다음"이라고 하면 그다음 컷을 그려 줘. 여러 컷을 한 장에 나누어 그리지 말 것. 모든 컷에서 장소, 인물의 생김새와 옷을 똑같이 유지해 줘.`;
 }
 export function masterPrompt(p: Project, scene: Scene, cuts: Cut[], s: Settings): string {
   const events = cuts.map(c => (p.cuts[c.key]?.desc || c.action || '').split(/(?<=[.!?])\s/)[0]).filter(Boolean).slice(0, 12);
