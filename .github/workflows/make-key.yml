@@ -1,0 +1,36 @@
+name: 서명 키 만들기 (한 번만)
+
+# 태블릿에서도 할 수 있게: 비밀값 ANDROID_KEYSTORE_PASSWORD 하나만 넣고 이 작업을 실행하면
+# 서명 키를 만들어 그 비밀번호로 암호화한 파일(release.jks.enc)만 저장소에 올린다.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  make:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - name: 키 만들기
+        env:
+          PW: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          if [ -z "$PW" ]; then echo "::error::먼저 ANDROID_KEYSTORE_PASSWORD 비밀값을 넣어 주세요."; exit 1; fi
+          if [ ${#PW} -lt 16 ]; then echo "::error::비밀번호를 16글자 이상으로 해 주세요."; exit 1; fi
+          ENC=tablet-app/android/app/release.jks.enc
+          if [ -f "$ENC" ]; then echo "::error::이미 서명 키가 있어요. 새로 만들면 앱을 지웠다 다시 깔아야 해서 멈췄어요."; exit 1; fi
+          keytool -genkeypair -keystore /tmp/release.jks -alias screenwriter -keyalg RSA -keysize 2048 -validity 36500 \
+            -storepass "$PW" -keypass "$PW" -dname "CN=Screenwriter, O=johnyuapril, C=KR"
+          openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -in /tmp/release.jks -out "$ENC" -pass env:PW
+          rm /tmp/release.jks
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$ENC"
+          git commit -m "암호화된 서명 키 추가"
+          git push

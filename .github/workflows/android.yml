@@ -4,6 +4,9 @@ on:
   push:
     branches: [main]
     paths: ['tablet-app/**', '.github/workflows/android.yml']
+  workflow_run:
+    workflows: ['서명 키 만들기 (한 번만)']
+    types: [completed]
   workflow_dispatch:
 
 permissions:
@@ -11,6 +14,7 @@ permissions:
 
 jobs:
   build:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -35,11 +39,14 @@ jobs:
         working-directory: tablet-app/android
         env:
           KS: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          PW: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
         run: |
           if [ -n "$KS" ]; then
             echo "$KS" | base64 -d > app/release.jks
+          elif [ -f app/release.jks.enc ] && [ -n "$PW" ]; then
+            openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in app/release.jks.enc -out app/release.jks -pass env:PW
           else
-            echo "::warning::서명 키 비밀값이 없어 임시 키로 서명해요. 다음 버전은 덮어 설치가 안 될 수 있어요."
+            echo "::warning::서명 키가 없어 임시 키로 서명해요. 다음 버전은 덮어 설치가 안 될 수 있어요."
             keytool -genkeypair -keystore app/release.jks -alias screenwriter -keyalg RSA -keysize 2048 -validity 36500 \
               -storepass temporary -keypass temporary -dname "CN=Screenwriter temp"
             echo "KEYSTORE_PASSWORD=temporary" >> "$GITHUB_ENV"
@@ -51,7 +58,7 @@ jobs:
           SECRET_PW: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           KEY_ALIAS: screenwriter
         run: |
-          export KEYSTORE_PASSWORD="${SECRET_PW:-$KEYSTORE_PASSWORD}"
+          if [ "$KEYSTORE_PASSWORD" != "temporary" ]; then export KEYSTORE_PASSWORD="$SECRET_PW"; fi
           chmod +x gradlew && ./gradlew assembleRelease --no-daemon
       - run: cp android/app/build/outputs/apk/release/app-release.apk "Screenwriter-v${{ github.run_number }}.apk"
       - uses: actions/upload-artifact@v4

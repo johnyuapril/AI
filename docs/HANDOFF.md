@@ -22,7 +22,7 @@ PC 원본 코드를 쓸 수 없어서 태블릿용으로 새로 만든 첫 버�
 
 ## APK 빌드
 - main에 push하면 Actions가 빌드해서 Releases에 `Screenwriter-vN.apk`로 올린다.
-- 고정 키 비밀값(`ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`)이 아직 없다. Claude 세션에서는 비밀값 등록이 막혀 있어서 사용자가 PC에서 직접 넣어야 한다 (docs/SIGNING.md). 그 전까지는 임시 키라 업데이트 때 백업 → 삭제 → 설치 → 복원이 필요하다.
+- 고정 서명 키: 아직 없음. 태블릿에서 할 수 있는 방법을 만들어 둠 (docs/SIGNING.md: 비밀값 ANDROID_KEYSTORE_PASSWORD 하나 + "서명 키 만들기" 워크플로 실행 → 암호화된 release.jks.enc 를 저장소에 올림). 그 전까지는 임시 키라 업데이트 때 백업 → 삭제 → 설치 → 복원.
 
 ## 다음에 할 일 / 알려진 한계
 - PC 버전의 "다운로드 폴더 자동 감시"는 없다 (대신 여러 장 한꺼번에 넣기).
