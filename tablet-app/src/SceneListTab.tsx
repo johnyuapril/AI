@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 import type { WsProps } from './Workspace';
 import type { Project } from './types';
 import { applyAiCuts, autoSummary, cutValues, estimatePages, getCuts, getScenes, isAiScene, knownNames, mergeCuts, resetBreaks, sceneStats, splitAt, type Cut, type Scene } from './script';
-import { buildCutSplitRequest, buildFullCutSplitRequest, fullScriptText, parseCutSplitAnswer, scriptFileName } from './prompts';
+import { buildCutSplitRequest, buildFullCutSplitRequest, fullScriptText, parseCutSplitAnswer, resolveNumbers, scriptFileName } from './prompts';
 import { copyText } from './util';
 import type { AICut } from './types';
 import { ANGLES, MOVES, SHOT_SIZES, termLabel } from './shots';
@@ -181,7 +181,7 @@ function AiSplitModal({ p, scene, scenes, names, onClose, onApply }: { p: Projec
   const groups = useMemo(() => {
     const out: [Scene, AICut[]][] = [];
     for (const s of scene ? [scene] : scenes) {
-      const list = parsed.filter(c => c.scene === s.num || (scene && !c.scene)).map(({ scene: _x, ...c }) => c);
+      const list = parsed.filter(c => c.scene === s.num || (scene && !c.scene)).map(c => resolveNumbers(c, s));
       if (list.length && list.every(c => !c.dlg?.length)) {
         // 표처럼 대사 칸이 없는 답: 씬의 대사를 마지막 컷에 붙임
         const dl = sceneDialogues(s);
@@ -217,7 +217,7 @@ function AiSplitModal({ p, scene, scenes, names, onClose, onApply }: { p: Projec
         <span className="muted small-t">→ {scene ? '외부 AI에 붙여 넣고 답을 받아요' : '파일과 함께 보내요'}</span>
       </div>
       <div className="row"><b>{scene ? '2.' : '3.'}</b> <button onClick={paste}>AI 답 붙여넣기</button><span className="muted small-t">또는 아래 칸에 직접 붙여넣기 (표로 답해도 돼요)</span></div>
-      <textarea value={text} onChange={e => setText(e.target.value)} rows={10} style={{ width: '100%', fontSize: 14 }} placeholder={`[${scene?.num ?? 1}-1] EWS / 하이앵글 / 고정\n대본: …\n화면: …\n인물: 없음`} />
+      <textarea value={text} onChange={e => setText(e.target.value)} rows={10} style={{ width: '100%', fontSize: 14 }} placeholder={`[${scene?.num ?? 1}-1] EWS / 하이앵글 / 고정\n대본 번호: 1\n화면: …\n인물: 없음\n대사 번호: 없음`} />
       {text.trim() && <div className="small-t">{total ? <>읽은 결과: {groups.map(g => `S#${g[0].num} ${g[1].length}컷`).join(', ').slice(0, 400)}</> : <span style={{ color: 'var(--accent)' }}>컷을 찾지 못했어요. [1-1] 같은 컷 번호가 있는지 확인해 주세요.</span>}</div>}
       {!scene && done.length > 0 && <div className="small-t">바꾼 씬 {done.length}개 / 전체 {scenes.length}개{left.length ? ` · 다음은 S#${left[0].num}부터예요. AI에게 "다음"이라고 보내 주세요.` : ' · 모두 끝났어요!'}</div>}
       <div className="row" style={{ justifyContent: 'flex-end' }}>

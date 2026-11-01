@@ -1,5 +1,5 @@
 import type { AICut, Project, Settings } from './types';
-import { type Cut, type Scene, cutValues, isNightTime } from './script';
+import { type Cut, type Scene, type Unit, cutValues, isNightTime, sceneUnits } from './script';
 import { SHOT_SIZES, ANGLES, MOVES, termLabel, parseShotLine } from './shots';
 import { cleanPasted } from './util';
 
@@ -128,20 +128,37 @@ const DIRECTOR_RULES = [
   '- 이야기 전체의 흐름과 인물의 감정을 생각해서, 관객에게 무엇을 어떤 순서로 보여 줄지 감독으로서 정해.',
   '- 한 컷 = 카메라가 끊기지 않고 보여 주는 한 화면.',
   '- 한 문장 안에서도 보이는 대상, 크기, 장소가 바뀌면 컷을 나눠. (예: 항공 전경 → 도로 → 코너에서 나타나는 차)',
-  '- 대사·소리는 그게 들리는 동안 화면에 보이는 컷에 넣어. 화면 밖 소리는 (소리)라고 표시.',
+  '- 대본의 문장마다 (1), (2) 처럼 번호가 붙어 있어. 대본 문장이나 대사는 다시 옮겨 쓰지 말고 번호로만 가리켜 줘.',
+  '- 대사·소리는 그게 들리는 동안 화면에 보이는 컷에 번호로 넣어.',
   '- 샷 크기는 EWS, WS, FS, MS, MCU, CU, ECU, OTS, 2S 중에서, 앵글과 카메라 움직임은 한국어로 써.',
   '- 컷 번호는 [씬번호-컷번호] 로. (예: [12-3] 은 12번 씬의 세 번째 컷)',
 ];
 const ANSWER_FORMAT = (n: number) => [
   '[답하는 형식] 표로 쓰지 말고, 컷마다 아래 모양 그대로. 다른 말은 붙이지 마.',
   `[${n}-1] 샷 크기 / 앵글 / 카메라 움직임`,
-  '대본: 이 컷에 해당하는 대본 구절 (그대로 옮기기)',
-  '화면: 이 컷 화면에 보이는 것 (한 순간, 구체적으로)',
+  '대본 번호: 이 컷에 해당하는 지문 번호 (예: 1 또는 2-3)',
+  '화면: 이 컷 화면에 보이는 것을 네 말로 짧게 (한 순간, 구체적으로)',
   '인물: 화면에 나오는 인물 이름 (없으면 없음)',
-  '대사: 이름: 대사 (이 컷에 들리는 대사가 있을 때만, 화면 밖이면 이름(소리): 대사)',
+  '대사 번호: 이 컷에 들리는 대사 번호 (없으면 없음)',
   '',
   `[${n}-2] …`,
 ];
+/** 씬 대본에 문장 번호 붙이기 (AI가 원문을 옮기지 않고 번호로 가리키게) */
+export function numberedScene(scene: Scene): string {
+  const out: string[] = []; let k = 0; let lastSpeaker = '';
+  for (const u of sceneUnits(scene)) {
+    k++;
+    if (u.kind === 'dlg') {
+      const sp = (u.speaker || '') + (u.off ? '(소리)' : '');
+      out.push(`(${k}) ${sp && sp !== lastSpeaker ? sp + ': ' : '   '}${u.paren && !u.cont ? u.paren + ' ' : ''}${u.text}`);
+      lastSpeaker = sp;
+    } else { out.push(`(${k}) ${u.kind === 'shot' ? '[샷] ' : ''}${u.text}`); lastSpeaker = ''; }
+  }
+  return out.join('\n');
+}
+/** 번호 → 대본 단위 */
+export function unitsByNumber(scene: Scene): Unit[] { return sceneUnits(scene); }
+
 function charList(p: Project, lines: { text: string }[]): string[] {
   return p.chars.filter(ch => lines.some(l => l.text.includes(ch.name))).map(ch => `${ch.name}${ch.look.trim() ? ': ' + ch.look.trim() : ''}`);
 }
@@ -149,13 +166,13 @@ export function buildCutSplitRequest(p: Project, scene: Scene): string {
   const looks = charList(p, scene.lines);
   const parts = [...DIRECTOR_RULES, '', `[씬] S#${scene.num}. ${scene.heading}`];
   if (looks.length) parts.push('', '[등장인물]', ...looks);
-  parts.push('', '[대본]', sceneScript(scene), '', ...ANSWER_FORMAT(scene.num));
+  parts.push('', '[대본]', numberedScene(scene), '', ...ANSWER_FORMAT(scene.num));
   return parts.join('\n');
 }
 /** 첨부할 시나리오 파일 내용 */
 export function fullScriptText(p: Project, scenes: Scene[]): string {
   const parts = [`${p.title}`, ''];
-  for (const s of scenes) parts.push(`S#${s.num}. ${s.heading}`, sceneScript(s), '');
+  for (const s of scenes) parts.push(`S#${s.num}. ${s.heading}`, numberedScene(s), '');
   return parts.join('\n');
 }
 export const scriptFileName = (p: Project) => `${(p.title || '시나리오').replace(/[\\/:*?"<>|]/g, '_')}_시나리오.txt`;
@@ -174,7 +191,7 @@ export function buildFullCutSplitRequest(p: Project, scenes: Scene[], per = 8): 
 const stripMd = (s: string) => s.replace(/\*\*|__|`/g, '').replace(/^\s*[-*•]\s+/, '').trim();
 
 /** AI 답 → 컷 목록. "[1-1] …" 형식과 표(| 컷 | 카메라 | 화면 |) 형식 둘 다 */
-export type ParsedCut = AICut & { scene: number };
+export type ParsedCut = AICut & { scene: number; srcNums?: number[]; dlgNums?: number[] };
 export function parseCutSplitAnswer(text: string, names: string[]): ParsedCut[] {
   const lines = text.replace(/\r/g, '').split('\n');
   const out: ParsedCut[] = [];
@@ -211,10 +228,12 @@ export function parseCutSplitAnswer(text: string, names: string[]): ParsedCut[] 
     const m = l.match(/^\[?\s*S?#?\s*\d+\s*-\s*\d+\s*\]?\s*[.:)]?\s*(.*)$/);
     if (m && /^\[?\s*S?#?\s*\d+\s*-\s*\d+/.test(l)) { cur = { scene: sceneOf(l), ...cam(m[1] || ''), src: '', see: '', dlg: [] }; out.push(cur); field = ''; continue; }
     if (!cur || !l) continue;
-    const f = l.match(/^(대본|화면|인물|대사|소리|카메라)\s*[:：]\s*(.*)$/);
+    const f = l.match(/^(대본\s*번호|대사\s*번호|대본|화면|인물|대사|소리|카메라)\s*[:：]\s*(.*)$/);
     if (f) {
-      field = f[1]; const v = f[2].trim();
-      if (field === '대본') cur.src = v;
+      field = f[1].replace(/\s/g, ''); const v = f[2].trim();
+      if (field === '대본번호') { cur.srcNums = nums(v); field = ''; }
+      else if (field === '대사번호') { cur.dlgNums = nums(v); field = ''; }
+      else if (field === '대본') cur.src = v;
       else if (field === '화면') cur.see = v;
       else if (field === '인물') cur.chars = splitNames(v);
       else if (field === '카메라') Object.assign(cur, cam(v));
@@ -226,6 +245,32 @@ export function parseCutSplitAnswer(text: string, names: string[]): ParsedCut[] 
     else if (field === '대사' || field === '소리') cur.dlg!.push(...parseDlg(l));
   }
   void names;
+  return out;
+}
+function nums(v: string): number[] {
+  const out: number[] = [];
+  for (const m of v.matchAll(/(\d+)\s*(?:[-~–]\s*(\d+))?/g)) {
+    const a = +m[1], b = m[2] ? +m[2] : a;
+    for (let i = Math.min(a, b); i <= Math.max(a, b) && i - a < 200; i++) out.push(i);
+  }
+  return out;
+}
+/** 번호로 받은 답을 앱의 대본으로 채우기 */
+export function resolveNumbers(c: ParsedCut, scene: Scene): AICut {
+  const units = sceneUnits(scene);
+  const pick = (ns?: number[]) => (ns || []).map(n => units[n - 1]).filter(Boolean);
+  const { scene: _s, srcNums, dlgNums, ...rest } = c;
+  const out: AICut = { ...rest };
+  const su = pick(srcNums);
+  const du = pick(dlgNums);
+  const all = [...su, ...du];
+  if (su.length) out.src = su.filter(u => u.kind !== 'dlg').map(u => u.text).join(' ') || out.src;
+  const dl = all.filter(u => u.kind === 'dlg');
+  if (dl.length) {
+    const merged: { speaker: string; text: string; off: boolean }[] = [];
+    for (const u of dl) { const last = merged[merged.length - 1]; if (last && u.cont && last.speaker === (u.speaker || '')) last.text += ' ' + u.text; else merged.push({ speaker: u.speaker || '', text: u.text, off: !!u.off }); }
+    out.dlg = merged;
+  }
   return out;
 }
 function splitNames(v: string): string[] {
