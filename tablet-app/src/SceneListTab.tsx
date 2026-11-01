@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 import type { WsProps } from './Workspace';
 import type { Project } from './types';
 import { applyAiCuts, autoSummary, cutValues, estimatePages, getCuts, getScenes, isAiScene, knownNames, mergeCuts, resetBreaks, sceneStats, splitAt, type Cut, type Scene } from './script';
-import { buildCutSplitRequest, buildFullCutSplitRequest, parseCutSplitAnswer } from './prompts';
+import { buildCutSplitRequest, buildFullCutSplitRequest, fullScriptText, parseCutSplitAnswer, scriptFileName } from './prompts';
 import { copyText } from './util';
 import type { AICut } from './types';
 import { ANGLES, MOVES, SHOT_SIZES, termLabel } from './shots';
@@ -207,12 +207,16 @@ function AiSplitModal({ p, scene, scenes, names, onClose, onApply }: { p: Projec
   const left = scenes.filter(s => !done.includes(s.num));
   return <Modal wide title={scene ? `S#${scene.num} AI로 컷 나누기` : 'AI로 전체 컷 나누기 (영화감독 역할)'} onClose={onClose}>
     <div style={{ display: 'grid', gap: 10 }}>
-      {!scene && <p className="muted small-t" style={{ margin: 0 }}>시나리오 전체를 주고 "영화감독"으로서 모든 씬을 컷으로 나누게 해요. 답이 길어서 씬 8개씩 받아요. 답을 붙여 넣고 "바꾸기"를 누른 뒤, AI에게 <b>"다음"</b>이라고 보내서 이어지는 답을 또 붙여 넣으면 돼요.</p>}
+      {!scene && <p className="muted small-t" style={{ margin: 0 }}>시나리오 전체를 파일로 주고 "영화감독"으로서 모든 씬을 컷으로 나누게 해요. 답이 길어서 씬 8개씩 받아요. 답을 붙여 넣고 "바꾸기"를 누른 뒤, AI에게 <b>"다음"</b>이라고 보내서 이어지는 답을 또 붙여 넣으면 돼요.</p>}
+      {!scene && <div className="row">
+        <b>1.</b> <button className="primary" onClick={async () => { try { await saveFile(new Blob([fullScriptText(p, scenes)], { type: 'text/plain' }), scriptFileName(p)); } catch (e: any) { toast('파일 저장 실패: ' + (e?.message || e)); } }}>시나리오 파일 보내기</button>
+        <span className="muted small-t">→ 공유 창에서 ChatGPT를 고르거나, 저장된 파일(문서/시나리오작업실)을 대화창에 첨부해요</span>
+      </div>}
       <div className="row">
-        <b>1.</b> <button className="primary" onClick={async () => toast(await copyText(request()) ? '복사했어요. ChatGPT 등에 붙여 넣으세요.' : '복사하지 못했어요.')}>{scene ? '컷 나누기 요청 복사' : '시나리오 전체 + 요청 복사'}</button>
-        <span className="muted small-t">→ 외부 AI에 붙여 넣고 답을 받아요</span>
+        <b>{scene ? '1.' : '2.'}</b> <button className="primary" onClick={async () => toast(await copyText(request()) ? '복사했어요. 파일을 첨부한 대화창에 붙여 넣으세요.' : '복사하지 못했어요.')}>{scene ? '컷 나누기 요청 복사' : '요청 문장 복사'}</button>
+        <span className="muted small-t">→ {scene ? '외부 AI에 붙여 넣고 답을 받아요' : '파일과 함께 보내요'}</span>
       </div>
-      <div className="row"><b>2.</b> <button onClick={paste}>AI 답 붙여넣기</button><span className="muted small-t">또는 아래 칸에 직접 붙여넣기 (표로 답해도 돼요)</span></div>
+      <div className="row"><b>{scene ? '2.' : '3.'}</b> <button onClick={paste}>AI 답 붙여넣기</button><span className="muted small-t">또는 아래 칸에 직접 붙여넣기 (표로 답해도 돼요)</span></div>
       <textarea value={text} onChange={e => setText(e.target.value)} rows={10} style={{ width: '100%', fontSize: 14 }} placeholder={`[${scene?.num ?? 1}-1] EWS / 하이앵글 / 고정\n대본: …\n화면: …\n인물: 없음`} />
       {text.trim() && <div className="small-t">{total ? <>읽은 결과: {groups.map(g => `S#${g[0].num} ${g[1].length}컷`).join(', ').slice(0, 400)}</> : <span style={{ color: 'var(--accent)' }}>컷을 찾지 못했어요. [1-1] 같은 컷 번호가 있는지 확인해 주세요.</span>}</div>}
       {!scene && done.length > 0 && <div className="small-t">바꾼 씬 {done.length}개 / 전체 {scenes.length}개{left.length ? ` · 다음은 S#${left[0].num}부터예요. AI에게 "다음"이라고 보내 주세요.` : ' · 모두 끝났어요!'}</div>}

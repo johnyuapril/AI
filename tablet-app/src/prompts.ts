@@ -152,15 +152,21 @@ export function buildCutSplitRequest(p: Project, scene: Scene): string {
   parts.push('', '[대본]', sceneScript(scene), '', ...ANSWER_FORMAT(scene.num));
   return parts.join('\n');
 }
-/** 대본 전체를 주고 감독으로서 컷 나누기. 답이 길어서 씬 몇 개씩 나눠 받음 */
+/** 첨부할 시나리오 파일 내용 */
+export function fullScriptText(p: Project, scenes: Scene[]): string {
+  const parts = [`${p.title}`, ''];
+  for (const s of scenes) parts.push(`S#${s.num}. ${s.heading}`, sceneScript(s), '');
+  return parts.join('\n');
+}
+export const scriptFileName = (p: Project) => `${(p.title || '시나리오').replace(/[\\/:*?"<>|]/g, '_')}_시나리오.txt`;
+/** 시나리오는 파일로 첨부하고, 이 요청 문장만 붙여 넣음 */
 export function buildFullCutSplitRequest(p: Project, scenes: Scene[], per = 8): string {
   const looks = charList(p, p.lines);
   const parts = [...DIRECTOR_RULES,
-    `- 씬이 ${scenes.length}개라 답이 길어. 한 번에 씬 ${per}개씩만 답하고, 내가 "다음"이라고 하면 이어서 다음 씬들을 답해 줘. 씬을 건너뛰지 마.`,
+    `- 시나리오 전체는 첨부한 파일 "${scriptFileName(p)}"에 있어. 파일을 끝까지 읽고 이야기 전체를 이해한 다음 나눠 줘. (씬 ${scenes.length}개)`,
+    `- 답이 길어서 한 번에 씬 ${per}개씩만 답하고, 내가 "다음"이라고 하면 이어서 다음 씬들을 답해 줘. 씬을 건너뛰지 마.`,
     '', `[작품] ${p.title}`];
   if (looks.length) parts.push('', '[등장인물]', ...looks);
-  parts.push('', '[시나리오 전체]');
-  for (const s of scenes) parts.push('', `S#${s.num}. ${s.heading}`, sceneScript(s));
   parts.push('', ...ANSWER_FORMAT(scenes[0]?.num || 1), '', `지금은 S#${scenes[0]?.num || 1}부터 씬 ${per}개만 답해 줘.`);
   return parts.join('\n');
 }
