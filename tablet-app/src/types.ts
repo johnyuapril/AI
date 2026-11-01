@@ -25,6 +25,7 @@ export interface SceneMeta {
   aiCuts?: AICut[];   // 외부 AI가 나눈 컷 (있으면 자동 나누기 대신 씀)
 }
 export interface AICut {
+  intent?: string;   // 연출 의도
   shot?: string; angle?: string; move?: string; cam?: string;
   src: string;        // 이 컷에 해당하는 대본 부분
   see: string;        // 화면 핵심

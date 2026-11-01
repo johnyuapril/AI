@@ -124,21 +124,20 @@ export function masterPrompt(p: Project, scene: Scene, cuts: Cut[], s: Settings)
 
 // -------- 외부 AI로 컷 나누기 --------
 const DIRECTOR_RULES = [
-  '너는 이 영화를 연출하는 영화감독이야. 촬영 전에 스토리보드를 만들 수 있게 시나리오를 컷으로 나눠 줘.',
-  '- 이야기 전체의 흐름과 인물의 감정을 생각해서, 관객에게 무엇을 어떤 순서로 보여 줄지 감독으로서 정해.',
-  '- 한 컷 = 카메라가 끊기지 않고 보여 주는 한 화면.',
-  '- 한 문장 안에서도 보이는 대상, 크기, 장소가 바뀌면 컷을 나눠. (예: 항공 전경 → 도로 → 코너에서 나타나는 차)',
-  '- 대본의 문장마다 (1), (2) 처럼 번호가 붙어 있어. 대본 문장이나 대사는 다시 옮겨 쓰지 말고 번호로만 가리켜 줘.',
-  '- 대사·소리는 그게 들리는 동안 화면에 보이는 컷에 번호로 넣어.',
+  '너는 이 영화를 연출하는 영화감독이야. 촬영 전에 실제로 그릴 수 있는 정밀 콘티(스토리보드)를 만들 수 있게 시나리오를 컷으로 나누고 화면을 설계해 줘.',
+  '- 기계적으로 문장마다 자르지 말고, 이야기 전체의 흐름과 인물의 감정을 생각해서 감독으로서 직접 판단해: 관객에게 정보를 공개하는 순서, 샷과 샷의 연결, 인물의 위치와 동작, 카메라의 움직임.',
+  '- 한 컷 = 카메라가 끊기지 않고 보여 주는 한 화면. 한 문장 안에서도 보이는 대상, 크기, 장소가 바뀌면 컷을 나눠. (예: 항공 전경 → 도로 → 코너에서 나타나는 차)',
+  '- 대본의 문장마다 (1), (2) 처럼 번호가 붙어 있어. 대본 문장이나 대사는 다시 옮겨 쓰지 말고 번호로만 가리켜. 대사·소리는 그게 들리는 동안 화면에 보이는 컷에 번호로 넣어.',
   '- 샷 크기는 EWS, WS, FS, MS, MCU, CU, ECU, OTS, 2S 중에서, 앵글과 카메라 움직임은 한국어로 써.',
   '- 컷 번호는 [씬번호-컷번호] 로. (예: [12-3] 은 12번 씬의 세 번째 컷)',
-  '- 장면 묘사도 같이 해 줘. 씬마다 컷보다 먼저 [설정표 씬번호]에 씬 내내 변하지 않는 장소 모습, 시간·날씨·조명, 인물별 생김새·옷차림·소지품을 정리해.',
-  '- 컷의 "화면"은 카메라로 바라봤을 때 보이는 것만 사실적이고 자세하게 2~4문장으로. 감정, 냄새, 소리, 비유는 쓰지 마.',
-  '- 이건 초벌이 아니라 촬영에 바로 쓸 최종본이야. 컷 수를 줄이거나 묘사를 요약·생략하지 말고, 첫 씬부터 마지막 씬까지 모든 컷을 같은 자세함으로 써. 분량이 많으면 질을 낮추지 말고 한 번에 답하는 씬 수를 줄여서 나눠 답해.',
-  '- 화면에 나오는 사람마다 위치와 방향, 고개, 팔과 손, 다리, 얼굴(보이는지, 표정)을 쓰고, 누가 누구의 어디를 어떻게 잡는지 같은 접촉과 동작을 구체적으로. 설정표의 옷차림·소품을 지켜.',
+  '- 씬마다 첫 컷 앞에 [설정표 씬번호]로 씬 내내 변하지 않는 장소 모습, 시간·날씨·조명, 인물별 생김새·옷차림·소지품을 정리해.',
+  '- "화면"은 그 컷 한 순간에 카메라에 보이는 것만, 그림을 그릴 수 있을 만큼 2~4문장으로 구체적으로: 화면 안 배치(앞·뒤, 왼쪽·오른쪽), 인물마다 위치·방향·자세·시선·손동작·표정, 누가 누구의 어디를 어떻게 잡는지 같은 접촉. 감정, 냄새, 소리, 비유는 쓰지 말고, 설정표의 옷차림·소품을 지켜.',
+  '- 연출 의도가 있으면 "연출:" 한 줄로 짧게 (왜 이 샷인지).',
+  '- 이건 초벌이 아니라 최종 콘티야. 품질을 지키기 위해 한 번에 컷 8개씩만 답해. 씬 중간에서 끊겨도 괜찮아. 내가 "다음"이라고 하면 바로 이어지는 컷부터 같은 자세함으로 8개를 더 답해. (이어지는 씬의 설정표는 그 씬 첫 컷 앞에서 한 번만)',
+  '- 8컷을 채우지 못하고 끝나면 마지막에 "끝"이라고 써.',
 ];
 const ANSWER_FORMAT = (n: number) => [
-  '[답하는 형식] 표로 쓰지 말고, 씬마다 설정표 다음에 컷을 아래 모양 그대로. 다른 말은 붙이지 마.',
+  '[답하는 형식] 표로 쓰지 말고, 아래 모양 그대로. 다른 말은 붙이지 마.',
   `[설정표 ${n}]`,
   '장소: …',
   '시간·날씨·조명: …',
@@ -146,7 +145,8 @@ const ANSWER_FORMAT = (n: number) => [
   '',
   `[${n}-1] 샷 크기 / 앵글 / 카메라 움직임`,
   '대본 번호: 이 컷에 해당하는 지문 번호 (예: 1 또는 2-3)',
-  '화면: 이 컷 한 순간에 화면에 보이는 것을 네 말로 자세히 (장면 묘사)',
+  '화면: 이 컷 한 순간에 보이는 것 (2~4문장, 위치·자세·시선·손동작·접촉)',
+  '연출: 왜 이렇게 찍는지 한 줄',
   '인물: 화면에 나오는 인물 이름 (없으면 없음)',
   '대사 번호: 이 컷에 들리는 대사 번호 (없으면 없음)',
   '',
@@ -187,31 +187,29 @@ export function fullScriptText(p: Project, scenes: Scene[]): string {
 export const scriptFileName = (p: Project) => `${(p.title || '시나리오').replace(/[\\/:*?"<>|]/g, '_')}_시나리오.txt`;
 /** 시나리오는 파일로 첨부하고, 이 요청 문장만 붙여 넣음 */
 export function buildFullCutSplitRequest(p: Project, scenes: Scene[], per = 8): string {
-  const all = per >= scenes.length;
   const looks = charList(p, p.lines);
-  const parts = [...DIRECTOR_RULES,
-    `- 시나리오 전체는 첨부한 파일 "${scriptFileName(p)}"에 있어. 파일을 끝까지 읽고 이야기 전체를 이해한 다음 나눠 줘. (씬 ${scenes.length}개)`,
-    all ? `- 씬 ${scenes.length}개 전부를 "컷나누기.txt" 파일로 만들어 내려받을 수 있게 해 줘. 자동 초벌이나 요약본은 안 돼. 한 파일에 최종본 수준으로 다 못 쓰면 씬 순서대로 여러 파일(컷나누기1.txt, 2.txt …)로 나눠 줘.`
-      : `- 한 번에 씬 ${per}개씩만 최종본 수준으로 답하고, 내가 "다음"이라고 하면 같은 자세함으로 다음 씬들을 이어서 답해 줘. 씬을 건너뛰지 마.`,
+  const first = scenes[0]?.num || 1;
+  const parts = [...DIRECTOR_RULES.map(r => r.replace(/컷 8개/g, `컷 ${per}개`).replace(/8개를/g, `${per}개를`).replace(/8컷/g, `${per}컷`)),
+    `- 시나리오 전체는 첨부한 파일 "${scriptFileName(p)}"에 있어. 파일을 끝까지 읽고 이야기 전체를 이해한 다음 작업해 줘. (씬 ${scenes.length}개)`,
     '', `[작품] ${p.title}`];
   if (looks.length) parts.push('', '[등장인물]', ...looks);
-  parts.push('', ...ANSWER_FORMAT(scenes[0]?.num || 1), '', all ? '전체 씬을 답해 줘.' : `지금은 S#${scenes[0]?.num || 1}부터 씬 ${per}개만 답해 줘.`);
+  parts.push('', ...ANSWER_FORMAT(first), '', `지금은 S#${first}의 첫 컷부터 컷 ${per}개만 답해 줘.`);
   return parts.join('\n');
 }
-
 /** 이어 받기 요청 */
-export function buildNextRequest(from: number, per: number): string {
-  return `다음. S#${from}부터 씬 ${per >= 9999 ? '끝까지' : per + '개'}를 앞과 같은 형식으로 답해 줘. 초벌·요약 말고 최종본 수준으로, 씬마다 [설정표]와 모든 컷의 자세한 화면 묘사를 빠짐없이.`;
+export function buildNextRequest(scene: number, cut: number, per: number): string {
+  return `다음. [${scene}-${cut}] 다음 컷부터 (그 씬이 끝났으면 다음 씬의 설정표와 첫 컷부터) 컷 ${per}개를 앞과 같은 형식, 같은 자세함으로 이어서 답해 줘. 감독으로서 컷마다 충분히 검토해서, 초벌·요약 말고 최종 콘티 수준으로.`;
 }
 
 const stripMd = (s: string) => s.replace(/\*\*|__|`/g, '').replace(/^\s*[-*•]\s+/, '').trim();
 
 /** AI 답 → 컷 목록. "[1-1] …" 형식과 표(| 컷 | 카메라 | 화면 |) 형식 둘 다 */
-export type ParsedCut = AICut & { scene: number; srcNums?: number[]; dlgNums?: number[] };
+export type ParsedCut = AICut & { scene: number; idx?: number; srcNums?: number[]; dlgNums?: number[] };
 export function parseCutSplitAnswer(text: string, names: string[]): ParsedCut[] {
   const lines = unescapeMd(text.replace(/\r/g, '')).split('\n');
   const out: ParsedCut[] = [];
   const sceneOf = (l: string) => Number((l.match(/(\d+)\s*-\s*\d+/) || [])[1]) || 0;
+  const cutOf = (l: string) => Number((l.match(/\d+\s*-\s*(\d+)/) || [])[1]) || 0;
   const cam = (h: string): Partial<AICut> => {
     const r: Partial<AICut> = { cam: stripMd(h) };
     for (const tok of h.split(/[\/·,|]/)) {
@@ -233,7 +231,7 @@ export function parseCutSplitAnswer(text: string, names: string[]): ParsedCut[] 
     const iCam = idx(/카메라|샷|앵글/, 1), iSee = idx(/화면|내용|묘사/, 2), iSrc = idx(/대본|지문/, -1), iDlg = idx(/대사|소리|오디오/, -1), iChar = idx(/인물/, -1);
     for (const r of tableRows) {
       const see = r[iSee] || '';
-      out.push({ scene: sceneOf(r[0]), ...cam(r[iCam] || ''), see, src: iSrc >= 0 ? r[iSrc] : '', chars: iChar >= 0 ? splitNames(r[iChar]) : undefined, dlg: iDlg >= 0 ? parseDlg(r[iDlg]) : [] });
+      out.push({ scene: sceneOf(r[0]), idx: cutOf(r[0]), ...cam(r[iCam] || ''), see, src: iSrc >= 0 ? r[iSrc] : '', chars: iChar >= 0 ? splitNames(r[iChar]) : undefined, dlg: iDlg >= 0 ? parseDlg(r[iDlg]) : [] });
     }
     return out;
   }
@@ -242,16 +240,17 @@ export function parseCutSplitAnswer(text: string, names: string[]): ParsedCut[] 
   for (const raw of lines) {
     const l = stripMd(raw);
     const m = l.match(/^\[?\s*S?#?\s*\d+\s*-\s*\d+\s*\]?\s*[.:)]?\s*(.*)$/);
-    if (m && /^\[?\s*S?#?\s*\d+\s*-\s*\d+/.test(l)) { cur = { scene: sceneOf(l), ...cam(m[1] || ''), src: '', see: '', dlg: [] }; out.push(cur); field = ''; continue; }
+    if (m && /^\[?\s*S?#?\s*\d+\s*-\s*\d+/.test(l)) { cur = { scene: sceneOf(l), idx: cutOf(l), ...cam(m[1] || ''), src: '', see: '', dlg: [] }; out.push(cur); field = ''; continue; }
     if (/^\[?\s*설정표/.test(l)) { cur = null; field = ''; continue; }
     if (!cur || !l) continue;
-    const f = l.match(/^(대본\s*번호|대사\s*번호|대본|화면|인물|대사|소리|카메라)\s*[:：]\s*(.*)$/);
+    const f = l.match(/^(대본\s*번호|대사\s*번호|대본|화면|연출|인물|대사|소리|카메라)\s*[:：]\s*(.*)$/);
     if (f) {
       field = f[1].replace(/\s/g, ''); const v = f[2].trim();
       if (field === '대본번호') { cur.srcNums = nums(v); field = ''; }
       else if (field === '대사번호') { cur.dlgNums = nums(v); field = ''; }
       else if (field === '대본') cur.src = v;
       else if (field === '화면') cur.see = v;
+      else if (field === '연출') cur.intent = v;
       else if (field === '인물') cur.chars = splitNames(v);
       else if (field === '카메라') Object.assign(cur, cam(v));
       else if (v) cur.dlg!.push(...parseDlg(v));
@@ -259,6 +258,7 @@ export function parseCutSplitAnswer(text: string, names: string[]): ParsedCut[] 
     }
     if (field === '대본') cur.src += ' ' + l;
     else if (field === '화면') cur.see += ' ' + l;
+    else if (field === '연출') cur.intent = (cur.intent || '') + ' ' + l;
     else if (field === '대사' || field === '소리') cur.dlg!.push(...parseDlg(l));
   }
   void names;
@@ -291,7 +291,7 @@ function nums(v: string): number[] {
 export function resolveNumbers(c: ParsedCut, scene: Scene): AICut {
   const units = sceneUnits(scene);
   const pick = (ns?: number[]) => (ns || []).map(n => units[n - 1]).filter(Boolean);
-  const { scene: _s, srcNums, dlgNums, ...rest } = c;
+  const { scene: _s, idx: _i, srcNums, dlgNums, ...rest } = c;
   const out: AICut = { ...rest };
   const su = pick(srcNums);
   const du = pick(dlgNums);

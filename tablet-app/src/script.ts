@@ -261,7 +261,7 @@ function aiCutsToCuts(scene: Scene, list: AICut[], names: string[]): Cut[] {
     return {
       key: aiKey(scene.id, i), sceneId: scene.id, no: i + 1, label: `${scene.num}-${i + 1}`,
       units: [], action: a.src || a.see, dialogues,
-      auto: { shot: a.shot, angle: a.angle, move: a.move, chars, src: 'AI', note: a.cam },
+      auto: { shot: a.shot, angle: a.angle, move: a.move, chars, src: 'AI', note: [a.cam, a.intent && '연출: ' + a.intent].filter(Boolean).join(' · ') || undefined },
       seconds: Math.max(2, Math.round((a.src || a.see).length / 14 + dlgLen / 7)),
     };
   });
@@ -298,11 +298,12 @@ export function splitAt(p: Project, scene: Scene, unitIds: string[]): Project {
   return { ...p, scenes: { ...p.scenes, [scene.id]: m } };
 }
 /** AI 컷 목록을 씬에 넣기. 예전 AI 컷의 그림·묘사 등은 지움 */
-export function applyAiCuts(p: Project, scene: Scene, list: AICut[], metas?: (CutMeta | undefined)[], setTable?: string): Project {
+export function applyAiCuts(p: Project, scene: Scene, list: AICut[], metas?: (CutMeta | undefined)[], setTable?: string, keep = 0): Project {
   const cuts = { ...p.cuts };
   const old = p.scenes[scene.id]?.aiCuts?.length || 0;
   for (let i = 0; i < Math.max(old, list.length); i++) {
     const k = aiKey(scene.id, i);
+    if (i < keep) continue;
     if (i < list.length) cuts[k] = metas ? { ...(metas[i] || {}) } : { desc: list[i].see || undefined };
     else delete cuts[k];
   }
