@@ -54,3 +54,26 @@ export function scriptParas(p: Project): { t: string; text: string }[] {
   return p.lines.filter(l => l.text.trim() || l.t === 'scene').map(l => ({ t: l.t, text: l.t === 'scene' ? `S#${++n}. ${l.text}` : l.text }));
 }
 export { TYPE_LABEL };
+
+/** 구글 시트용: 앱의 신 리스트처럼 씬 → 컷 묶음 */
+export interface TreeCut { label: string; shot: string; chars: string; text: string; dialogue: string; desc: string; corr: string; secs: number }
+export interface TreeScene { num: number; place: string; time: string; chars: string; summary: string; cutCount: number; pages: number; secs: number; dlg: number; notes: string; setTable: string; cuts: TreeCut[] }
+export function sceneTree(p: Project): TreeScene[] {
+  const names = knownNames(p);
+  return getScenes(p.lines).map(s => {
+    const st = sceneStats(s, names); const cuts = getCuts(p, s, names); const m = p.scenes[s.id] || {};
+    return {
+      num: s.num, place: s.place, time: s.time, chars: st.chars.join(', '),
+      summary: m.summary || autoSummary(s), cutCount: cuts.length, pages: +estimatePages(s.lines).toFixed(1),
+      secs: cuts.reduce((a, c) => a + c.seconds, 0), dlg: st.dialogueCount, notes: m.notes || '', setTable: m.setTable || '',
+      cuts: cuts.map(c => {
+        const v = cutValues(p, c); const cm = p.cuts[c.key] || {};
+        return {
+          label: c.label, shot: [v.shot, termLabel(ANGLES, v.angle), termLabel(MOVES, v.move)].filter(Boolean).join(' · '),
+          chars: v.chars.join(', '), text: c.action, dialogue: c.dialogues.map(d => `${d.speaker}${d.off ? '(소리)' : ''}: ${d.text}`).join('\n'),
+          desc: cm.desc || '', corr: cm.corr || '', secs: c.seconds,
+        };
+      }),
+    };
+  });
+}

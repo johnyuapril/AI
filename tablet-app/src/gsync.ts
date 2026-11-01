@@ -1,8 +1,8 @@
 import type { GSync, Project } from './types';
-import { cutRows, describeRows, describeText, sceneRows, scriptParas } from './exports';
+import { describeText, sceneTree, scriptParas } from './exports';
 import code from './google-sync.gs.txt?raw';
 
-export const CODE_VERSION = 2;
+export const CODE_VERSION = 3;
 const OLD = '구글 쪽 코드가 예전 버전이에요. 앱의 "구글 연결" 창에서 코드를 다시 복사해 붙여넣고, 배포 → 배포 관리 → 연필 → 버전: 새 버전 → 배포를 눌러 주세요.';
 export const scriptCode = (key: string) => code.replace('__KEY__', key);
 export const newKey = () => Array.from(crypto.getRandomValues(new Uint8Array(12)), b => b.toString(16).padStart(2, '0')).join('');
@@ -31,7 +31,7 @@ export async function testConnection(g: GSync) { await post(g, { ping: true }); 
 export async function syncProject(g: GSync, p: Project): Promise<SyncLinks> {
   const j = await post(g, {
     id: p.id, title: p.title || '제목 없음',
-    script: scriptParas(p), scenes: sceneRows(p), cuts: cutRows(p), describe: describeRows(p), describeText: describeText(p),
+    script: scriptParas(p), tree: sceneTree(p), describeText: describeText(p),
   });
   const l = { script: j.script, desc: j.desc, sheet: j.sheet, at: Date.now() };
   setLinks(p.id, l);

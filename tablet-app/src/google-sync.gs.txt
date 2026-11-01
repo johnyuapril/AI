@@ -2,7 +2,7 @@
 // 앱의 "구글 연결" 창에서 "코드 복사"를 누르면 KEY가 채워진 이 코드가 복사돼요.
 const KEY = '__KEY__';
 const FOLDER = '시나리오 작업실';
-const VERSION = 2;
+const VERSION = 3;
 
 function doGet() { return out({ ok: true, app: 'screenwriter-sync', version: VERSION }); }
 
@@ -20,11 +20,10 @@ function doPost(e) {
     const descDoc = openOrCreateDoc(ids.desc, d.title + ' - 장면 묘사', folder);
     writeLines(descDoc, d.title + ' 장면 묘사', d.describeText);
     const ss = openOrCreateSheet(ids.sheet, d.title + ' - 신 리스트', folder);
-    writeTab(ss, '신 리스트', d.scenes);
-    writeTab(ss, '컷 리스트', d.cuts);
-    writeTab(ss, '장면 묘사', d.describe);
-    const first = ss.getSheetByName('Sheet1') || ss.getSheetByName('시트1');
-    if (first && ss.getSheets().length > 1) ss.deleteSheet(first);
+    writeSceneList(ss, d.tree);
+    writeDescribe(ss, d.tree);
+    ['컷 리스트', 'Sheet1', '시트1'].forEach(function (n) { const x = ss.getSheetByName(n); if (x && ss.getSheets().length > 1) ss.deleteSheet(x); });
+    ss.setActiveSheet(ss.getSheetByName('신 리스트')); ss.moveActiveSheet(1);
 
     // 제목이 바뀌었으면 파일 이름도 맞추기
     scriptDoc.setName(d.title + ' - 대본'); descDoc.setName(d.title + ' - 장면 묘사'); ss.rename(d.title + ' - 신 리스트');
@@ -100,15 +99,77 @@ function writeLines(doc, title, lines) {
   });
   doc.saveAndClose();
 }
-function writeTab(ss, name, rows) {
-  const sh = ss.getSheetByName(name) || ss.insertSheet(name);
-  sh.clear();
-  if (!rows || !rows.length) return;
-  const w = Math.max.apply(null, rows.map(function (r) { return r.length; }));
-  const data = rows.map(function (r) { const a = r.map(function (v) { return v === null || v === undefined ? '' : v; }); while (a.length < w) a.push(''); return a; });
-  const rg = sh.getRange(1, 1, data.length, w);
-  rg.setValues(data); rg.setWrap(true); rg.setVerticalAlignment('top');
-  const hd = sh.getRange(1, 1, 1, w);
-  hd.setFontWeight('bold'); hd.setBackground('#f1f1ee');
-  sh.setFrozenRows(1);
+// 시트를 새로 만들어 바꿔 끼움 (예전 묶음·서식이 남지 않게)
+function freshSheet(ss, name) {
+  const old = ss.getSheetByName(name);
+  const tmp = ss.insertSheet(name + ' (새로)');
+  if (old) ss.deleteSheet(old);
+  tmp.setName(name);
+  return tmp;
+}
+
+// 공통: 표 그리기. rows = [{ v: [...], kind: 'head'|'scene'|'cut' }]
+function drawTable(sh, widths, wrapCols, rows, groups) {
+  const w = widths.length;
+  const vals = rows.map(function (r) { const a = r.v.map(function (x) { return x === null || x === undefined ? '' : x; }); while (a.length < w) a.push(''); return a; });
+  if (sh.getMaxColumns() < w) sh.insertColumnsAfter(sh.getMaxColumns(), w - sh.getMaxColumns());
+  if (sh.getMaxRows() < vals.length + 1) sh.insertRowsAfter(sh.getMaxRows(), vals.length + 1 - sh.getMaxRows());
+  const all = sh.getRange(1, 1, vals.length, w);
+  all.setNumberFormat('@');
+  all.setValues(vals);
+  all.setFontSize(10); all.setVerticalAlignment('top');
+  all.setWrapStrategy(SpreadsheetApp.WrapStrategy.CLIP);
+  const bg = [], fw = [], fc = [];
+  rows.forEach(function (r) {
+    const b = r.kind === 'head' ? '#222222' : r.kind === 'scene' ? '#f4f4f0' : '#ffffff';
+    const c = r.kind === 'head' ? '#ffffff' : r.kind === 'cut' ? '#333333' : '#111111';
+    const f = r.kind === 'cut' ? 'normal' : 'bold';
+    const rb = [], rf = [], rc = []; for (let i = 0; i < w; i++) { rb.push(b); rf.push(f); rc.push(c); }
+    bg.push(rb); fw.push(rf); fc.push(rc);
+  });
+  all.setBackgrounds(bg); all.setFontWeights(fw); all.setFontColors(fc);
+  all.setBorder(true, true, true, true, false, true, '#dddddd', SpreadsheetApp.BorderStyle.SOLID);
+  widths.forEach(function (px, i) { sh.setColumnWidth(i + 1, px); });
+  wrapCols.forEach(function (c) { if (vals.length > 1) sh.getRange(2, c, vals.length - 1, 1).setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP); });
+  sh.setFrozenRows(1); sh.setFrozenColumns(1);
+  sh.setRowHeight(1, 30);
+  // 씬 아래 컷 줄 묶기 (앱의 ▸ 펼치기처럼, 처음엔 접힘)
+  sh.setRowGroupControlPosition(SpreadsheetApp.GroupControlTogglePosition.BEFORE);
+  groups.forEach(function (g) { if (g.n > 0) sh.getRange(g.start, 1, g.n, 1).shiftRowGroupDepth(1); });
+  groups.forEach(function (g) { if (g.n > 0) { try { sh.getRowGroup(g.start, 1).collapse(); } catch (e) {} } });
+  const extraCols = sh.getMaxColumns() - w; if (extraCols > 0) sh.deleteColumns(w + 1, extraCols);
+  const extraRows = sh.getMaxRows() - vals.length; if (extraRows > 1) sh.deleteRows(vals.length + 2, extraRows - 1);
+}
+
+// 신 리스트: 씬 한 줄 + (접힌) 컷 줄
+function writeSceneList(ss, tree) {
+  const sh = freshSheet(ss, '신 리스트');
+  const rows = [{ kind: 'head', v: ['S# / 컷', '장소', '시간', '등장인물', '내용', '컷', '분량', '대사', '비고', '샷'] }];
+  const groups = [];
+  (tree || []).forEach(function (s) {
+    rows.push({ kind: 'scene', v: ['S#' + s.num, s.place, s.time, s.chars, s.summary, s.cutCount, s.pages + '쪽 · ' + s.secs + '초', s.dlg, s.notes, ''] });
+    const start = rows.length + 1;
+    s.cuts.forEach(function (c) {
+      const body = [c.desc || c.text, c.dialogue].filter(function (x) { return x; }).join('\n');
+      rows.push({ kind: 'cut', v: ['   ' + c.label, '', '', c.chars, body, '', c.secs + '초', '', '', c.shot] });
+    });
+    groups.push({ start: start, n: s.cuts.length });
+  });
+  drawTable(sh, [70, 170, 60, 150, 460, 45, 90, 45, 180, 170], [5, 9], rows, groups);
+}
+
+// 장면 묘사: 씬(설정표) + 컷별 [대본 | 장면 묘사 | 바로잡기]
+function writeDescribe(ss, tree) {
+  const sh = freshSheet(ss, '장면 묘사');
+  const rows = [{ kind: 'head', v: ['S# / 컷', '대본', '장면 묘사', '바로잡기', '샷'] }];
+  const groups = [];
+  (tree || []).forEach(function (s) {
+    rows.push({ kind: 'scene', v: ['S#' + s.num, s.place + (s.time ? ' / ' + s.time : ''), s.setTable ? '[설정표] ' + s.setTable : '', '', ''] });
+    const start = rows.length + 1;
+    s.cuts.forEach(function (c) {
+      rows.push({ kind: 'cut', v: ['   ' + c.label, [c.text, c.dialogue].filter(function (x) { return x; }).join('\n'), c.desc, c.corr, c.shot] });
+    });
+    groups.push({ start: start, n: s.cuts.length });
+  });
+  drawTable(sh, [70, 380, 460, 200, 160], [2, 3, 4], rows, groups);
 }
