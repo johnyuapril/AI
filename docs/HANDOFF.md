@@ -12,7 +12,7 @@ PC 원본 코드를 쓸 수 없어서 태블릿용으로 새로 만든 첫 버�
 - 백업: 작품별 .sbk, 전체 백업 zip, 불러오기
 
 ## APK 빌드
-- main에 push하면 Actions가 빌드해서 Releases에 `시나리오작업실-vN.apk`로 올린다.
+- main에 push하면 Actions가 빌드해서 Releases에 `Screenwriter-vN.apk`로 올린다.
 - 저장소 비밀값 `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`가 있어야 한다.
 
 ## 다음에 할 일 / 알려진 한계
