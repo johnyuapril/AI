@@ -34,15 +34,23 @@ jobs:
         env:
           KS: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: |
-          if [ -z "$KS" ]; then echo "ANDROID_KEYSTORE_BASE64 비밀값이 없어요"; exit 1; fi
-          echo "$KS" | base64 -d > app/release.jks
+          if [ -n "$KS" ]; then
+            echo "$KS" | base64 -d > app/release.jks
+          else
+            echo "::warning::서명 키 비밀값이 없어 임시 키로 서명해요. 다음 버전은 덮어 설치가 안 될 수 있어요."
+            keytool -genkeypair -keystore app/release.jks -alias screenwriter -keyalg RSA -keysize 2048 -validity 36500 \
+              -storepass temporary -keypass temporary -dname "CN=Screenwriter temp"
+            echo "KEYSTORE_PASSWORD=temporary" >> "$GITHUB_ENV"
+          fi
       - name: APK 빌드
         working-directory: tablet-app/android
         env:
           VERSION_CODE: ${{ github.run_number }}
-          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          SECRET_PW: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           KEY_ALIAS: screenwriter
-        run: chmod +x gradlew && ./gradlew assembleRelease --no-daemon
+        run: |
+          export KEYSTORE_PASSWORD="${SECRET_PW:-$KEYSTORE_PASSWORD}"
+          chmod +x gradlew && ./gradlew assembleRelease --no-daemon
       - run: cp android/app/build/outputs/apk/release/app-release.apk "시나리오작업실-v${{ github.run_number }}.apk"
       - uses: actions/upload-artifact@v4
         with:
