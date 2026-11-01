@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 import type { WsProps } from './Workspace';
 import type { Project } from './types';
 import { applyAiCuts, autoSummary, cutValues, estimatePages, getCuts, getScenes, isAiScene, knownNames, mergeCuts, resetBreaks, sceneStats, splitAt, type Cut, type Scene } from './script';
-import { buildCutSplitRequest, buildFullCutSplitRequest, fullScriptText, parseCutSplitAnswer, parseSetTables, resolveNumbers, scriptFileName } from './prompts';
+import { buildCutSplitRequest, buildFullCutSplitRequest, fullScriptText, buildNextRequest, parseCutSplitAnswer, parseSetTables, resolveNumbers, scriptFileName } from './prompts';
 import { copyText } from './util';
 import type { AICut } from './types';
 import { ANGLES, MOVES, SHOT_SIZES, termLabel } from './shots';
@@ -197,7 +197,7 @@ function AiSplitModal({ p, scene, scenes, names, onClose, onApply }: { p: Projec
     try { const t = await navigator.clipboard.readText(); if (t) { setText(t); return; } } catch { /* */ }
     toast('아래 칸을 길게 눌러 붙여넣기 해 주세요.');
   };
-  const [per, setPer] = useState(() => { try { return Number(localStorage.getItem('ai-split-per')) || 8; } catch { return 8; } });
+  const [per, setPer] = useState(() => { try { return Number(localStorage.getItem('ai-split-per')) || 5; } catch { return 5; } });
   const setPerSave = (n: number) => { setPer(n); try { localStorage.setItem('ai-split-per', String(n)); } catch { /* */ } };
   const request = () => scene ? buildCutSplitRequest(p, scene) : buildFullCutSplitRequest(p, scenes, per);
   const loadFile = async () => { const [f] = await pickFiles('.txt,.md,text/plain,text/markdown'); if (f) setText(await f.text()); };
@@ -211,11 +211,11 @@ function AiSplitModal({ p, scene, scenes, names, onClose, onApply }: { p: Projec
   const left = scenes.filter(s => !done.includes(s.num));
   return <Modal wide title={scene ? `S#${scene.num} AI로 컷 나누기` : 'AI로 전체 컷 나누기 (영화감독 역할)'} onClose={onClose}>
     <div style={{ display: 'grid', gap: 10 }}>
-      {!scene && <p className="muted small-t" style={{ margin: 0 }}>시나리오 전체를 파일로 주고 "영화감독"으로서 모든 씬을 컷으로 나누게 해요. <b>장면 묘사(설정표와 컷 화면 묘사)도 같이 받아서</b> 장면 묘사 탭에 바로 들어가요. AI가 <b>한 번에 쓸 수 있는 답의 길이</b>에 한계가 있어서(씬 100개면 컷이 600~700개) 나눠 받는 게 안전해요. 나눠 받을 때는 답을 붙여 넣고 "바꾸기" → AI에게 <b>"다음"</b> → 또 붙여넣기.</p>}
+      {!scene && <p className="muted small-t" style={{ margin: 0 }}>시나리오 전체를 파일로 주고 "영화감독"으로서 모든 씬을 컷으로 나누게 해요. <b>장면 묘사(설정표와 컷 화면 묘사)도 같이 받아서</b> 장면 묘사 탭에 바로 들어가요. AI가 <b>한 번에 쓸 수 있는 답의 길이</b>에 한계가 있어서(씬 100개면 컷이 600~700개) 나눠 받는 게 안전해요. 나눠 받을 때는 답을 붙여 넣고 "바꾸기" → <b>"다음" 요청 복사</b> → AI에 붙여 넣기 → 답 붙여넣기.</p>}
       {!scene && <div className="row"><span className="small-t">한 번에 받을 씬</span>
-        {[8, 15, 30].map(n => <button key={n} className={'small' + (per === n ? ' primary' : '')} onClick={() => setPerSave(n)}>{n}개씩</button>)}
+        {[3, 5, 8, 15].map(n => <button key={n} className={'small' + (per === n ? ' primary' : '')} onClick={() => setPerSave(n)}>{n}개씩</button>)}
         <button className={'small' + (per >= 9999 ? ' primary' : '')} onClick={() => setPerSave(9999)}>전체 (파일로 받기)</button>
-        <span className="muted small-t">{per >= 9999 ? 'AI가 만든 "컷나누기.txt"를 받아서 아래 "답 파일 불러오기"로 넣어요' : '많이 받을수록 AI가 중간에 끊거나 줄여 쓸 수 있어요'}</span></div>}
+        <span className="muted small-t">{per >= 9999 ? 'AI가 만든 "컷나누기.txt"를 받아서 아래 "답 파일 불러오기"로 넣어요' : '많이 받을수록 AI가 초벌처럼 줄여 써요. 묘사까지 받으니 3~5개가 좋아요'}</span></div>}
       {!scene && <div className="row">
         <b>1.</b> <button className="primary" onClick={async () => { try { await saveFile(new Blob([fullScriptText(p, scenes)], { type: 'text/plain' }), scriptFileName(p)); } catch (e: any) { toast('파일 저장 실패: ' + (e?.message || e)); } }}>시나리오 파일 보내기</button>
         <span className="muted small-t">→ 공유 창에서 ChatGPT를 고르거나, 저장된 파일(문서/시나리오작업실)을 대화창에 첨부해요</span>
@@ -228,7 +228,8 @@ function AiSplitModal({ p, scene, scenes, names, onClose, onApply }: { p: Projec
       <div className="row"><b>{scene ? '2.' : '3.'}</b> <button onClick={paste}>AI 답 붙여넣기</button><button onClick={loadFile}>답 파일 불러오기</button><span className="muted small-t">또는 아래 칸에 직접 붙여넣기 (표로 답해도 돼요)</span></div>
       <textarea value={text} onChange={e => setText(e.target.value)} rows={10} style={{ width: '100%', fontSize: 14 }} placeholder={`[${scene?.num ?? 1}-1] EWS / 하이앵글 / 고정\n대본 번호: 1\n화면: …\n인물: 없음\n대사 번호: 없음`} />
       {text.trim() && <div className="small-t">{total ? <>읽은 결과: {groups.map(g => `S#${g[0].num} ${g[1].length}컷${g[2] ? '+설정표' : ''}`).join(', ').slice(0, 400)}</> : <span style={{ color: 'var(--accent)' }}>컷을 찾지 못했어요. [1-1] 같은 컷 번호가 있는지 확인해 주세요.</span>}</div>}
-      {!scene && done.length > 0 && <div className="small-t">바꾼 씬 {done.length}개 / 전체 {scenes.length}개{left.length ? ` · 다음은 S#${left[0].num}부터예요. AI에게 "다음"이라고 보내 주세요.` : ' · 모두 끝났어요!'}</div>}
+      {!scene && done.length > 0 && <div className="small-t">바꾼 씬 {done.length}개 / 전체 {scenes.length}개{left.length ? ` · 다음은 S#${left[0].num}부터예요. ` : ' · 모두 끝났어요!'}
+        {left.length > 0 && <button className="small primary" onClick={async () => toast(await copyText(buildNextRequest(left[0].num, per)) ? '복사했어요. AI 대화창에 붙여 넣으세요.' : '복사하지 못했어요.')}>"다음" 요청 복사</button>}</div>}
       <div className="row" style={{ justifyContent: 'flex-end' }}>
         <button className="primary" disabled={!total} onClick={apply}>이 컷들로 바꾸기</button>
       </div>
