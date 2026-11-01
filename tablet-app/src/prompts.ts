@@ -1,7 +1,7 @@
 import type { AICut, Project, Settings } from './types';
 import { type Cut, type Scene, type Unit, cutValues, isNightTime, sceneUnits } from './script';
 import { SHOT_SIZES, ANGLES, MOVES, termLabel, parseShotLine } from './shots';
-import { cleanPasted } from './util';
+import { cleanPasted, unescapeMd } from './util';
 
 function sceneScript(scene: Scene): string {
   const out: string[] = [];
@@ -178,13 +178,15 @@ export function fullScriptText(p: Project, scenes: Scene[]): string {
 export const scriptFileName = (p: Project) => `${(p.title || '시나리오').replace(/[\\/:*?"<>|]/g, '_')}_시나리오.txt`;
 /** 시나리오는 파일로 첨부하고, 이 요청 문장만 붙여 넣음 */
 export function buildFullCutSplitRequest(p: Project, scenes: Scene[], per = 8): string {
+  const all = per >= scenes.length;
   const looks = charList(p, p.lines);
   const parts = [...DIRECTOR_RULES,
     `- 시나리오 전체는 첨부한 파일 "${scriptFileName(p)}"에 있어. 파일을 끝까지 읽고 이야기 전체를 이해한 다음 나눠 줘. (씬 ${scenes.length}개)`,
-    `- 답이 길어서 한 번에 씬 ${per}개씩만 답하고, 내가 "다음"이라고 하면 이어서 다음 씬들을 답해 줘. 씬을 건너뛰지 마.`,
+    all ? `- 씬 ${scenes.length}개 전부를 한 번에 나눠 줘. 답이 한 번에 다 안 들어가면 전체 답을 "컷나누기.txt" 파일로 만들어서 내려받을 수 있게 해 줘. 씬을 건너뛰거나 줄이지 마.`
+      : `- 답이 길어서 한 번에 씬 ${per}개씩만 답하고, 내가 "다음"이라고 하면 이어서 다음 씬들을 답해 줘. 씬을 건너뛰지 마.`,
     '', `[작품] ${p.title}`];
   if (looks.length) parts.push('', '[등장인물]', ...looks);
-  parts.push('', ...ANSWER_FORMAT(scenes[0]?.num || 1), '', `지금은 S#${scenes[0]?.num || 1}부터 씬 ${per}개만 답해 줘.`);
+  parts.push('', ...ANSWER_FORMAT(scenes[0]?.num || 1), '', all ? '전체 씬을 답해 줘.' : `지금은 S#${scenes[0]?.num || 1}부터 씬 ${per}개만 답해 줘.`);
   return parts.join('\n');
 }
 
@@ -193,7 +195,7 @@ const stripMd = (s: string) => s.replace(/\*\*|__|`/g, '').replace(/^\s*[-*•]\
 /** AI 답 → 컷 목록. "[1-1] …" 형식과 표(| 컷 | 카메라 | 화면 |) 형식 둘 다 */
 export type ParsedCut = AICut & { scene: number; srcNums?: number[]; dlgNums?: number[] };
 export function parseCutSplitAnswer(text: string, names: string[]): ParsedCut[] {
-  const lines = text.replace(/\r/g, '').split('\n');
+  const lines = unescapeMd(text.replace(/\r/g, '')).split('\n');
   const out: ParsedCut[] = [];
   const sceneOf = (l: string) => Number((l.match(/(\d+)\s*-\s*\d+/) || [])[1]) || 0;
   const cam = (h: string): Partial<AICut> => {

@@ -27,6 +27,9 @@ PC 원본 코드를 쓸 수 없어서 태블릿용으로 새로 만든 첫 버�
 
 - 외부 AI를 옆 화면(분할 화면)에: 공유하면 ChatGPT가 앱 화면을 덮던 문제. AppUpdaterPlugin 에 shareFile/openSide 추가 (FLAG_ACTIVITY_LAUNCH_ADJACENT | NEW_TASK | MULTIPLE_TASK). 파일 보내기·그림 보내기는 모두 이걸로. 상단 "AI 열기 ◫" 버튼, AI 컷 나누기 창에도 버튼. AndroidManifest 에 <queries> (ChatGPT, Gemini, Claude 패키지). 실제 갤럭시 탭에서 분할 화면으로 열리는지는 사용자 확인 필요.
 
+- 붙여넣기 백슬래시: ChatGPT 답을 복사하면 `\[1-1\]`처럼 마크다운 이스케이프가 붙어 컷 번호를 못 읽던 문제. util.ts unescapeMd 로 붙여넣기(cleanPasted)와 parseCutSplitAnswer 에서 지움.
+- AI 컷 나누기 묶음 크기: 8/15/30/전체 고르기(localStorage 'ai-split-per'). 묶음은 입력이 아니라 AI 답 길이 제한 때문. '전체'는 AI에게 컷나누기.txt 파일로 답하라고 요청하고, 창의 '답 파일 불러오기'로 읽음.
+
 ## APK 빌드
 - main에 push하면 Actions가 빌드해서 Releases에 `Screenwriter-vN.apk`로 올린다.
 - 고정 서명 키: 2026-11-01 태블릿에서 만듦 (release.jks.enc, 비밀값 ANDROID_KEYSTORE_PASSWORD). v9부터 고정 키(CN=Screenwriter, O=johnyuapril). 이후 버전은 덮어 설치되고 앱 안 업데이트 버튼이 동작해야 함. 키를 다시 만들면 앱 재설치가 필요하니 절대 release.jks.enc 를 지우지 말 것.

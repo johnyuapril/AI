@@ -1,7 +1,12 @@
 export const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 
+/** ChatGPT 등에서 복사할 때 붙는 마크다운 이스케이프(\[1-1\] 같은 것) 지우기 */
+export function unescapeMd(s: string): string {
+  return s.replace(/\\([\\`*_{}\[\]()#+\-.!|~<>:=])/g, '$1').replace(/\\(?![nr])/g, '');
+}
 export function cleanPasted(s: string): string {
   let t = s.replace(/\r\n?/g, '\n');
+  t = t.replace(/\\([\\`*_{}\[\]()#+\-.!|~<>:=])/g, '$1');
   t = t.replace(/\\\\n|\\n|\\r/g, '\n').replace(/<br\s*\/?>/gi, '\n').replace(/[↵⏎]/g, '\n');
   t = t.replace(/\s*\\\s*\\\s*/g, '\n');      // "\ \" 같은 줄바꿈 기호
   t = t.replace(/\*\*(.+?)\*\*/g, '$1').replace(/__(.+?)__/g, '$1');
