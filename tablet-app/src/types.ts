@@ -33,4 +33,5 @@ export interface Project {
   createdAt: number; updatedAt: number;
 }
 export interface ProjectSummary { id: string; title: string; updatedAt: number; sceneCount: number; lineCount: number }
-export interface Settings { gptInstruction: string; styleText: string; styleImg?: string; promptHeader: string }
+export interface GSync { url: string; key: string; auto: boolean }
+export interface Settings { gptInstruction: string; styleText: string; styleImg?: string; promptHeader: string; gsync?: GSync }

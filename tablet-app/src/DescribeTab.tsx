@@ -5,6 +5,7 @@ import { buildDescribeRequest, parseDescribeAnswer } from './prompts';
 import { LazyText, useToast } from './ui';
 import { copyText } from './util';
 import { saveFile } from './native';
+import { describeText } from './exports';
 import { DEFAULT_GPT_INSTRUCTION } from './store';
 
 export default function DescribeTab(props: WsProps) {
@@ -17,15 +18,7 @@ export default function DescribeTab(props: WsProps) {
   const toggle = (id: string) => setOpen(o => { const n = new Set(o); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
   const exportTxt = async () => {
-    const out: string[] = [p.title, ''];
-    for (const s of scenes) {
-      const cuts = getCuts(p, s, names);
-      out.push(`S#${s.num}. ${s.heading}`);
-      const st = p.scenes[s.id]?.setTable; if (st) out.push('[설정표]', st);
-      for (const c of cuts) { const d = p.cuts[c.key]?.desc; if (d) out.push(`[${c.label}] ${d}`); }
-      out.push('');
-    }
-    toast('저장했어요: ' + await saveFile(new Blob([out.join('\n')], { type: 'text/plain' }), `${p.title}-장면묘사.txt`));
+    toast('저장했어요: ' + await saveFile(new Blob([[p.title, '', ...describeText(p)].join('\n')], { type: 'text/plain' }), `${p.title}-장면묘사.txt`));
   };
   return (
     <div className="page"><div className="page-inner">

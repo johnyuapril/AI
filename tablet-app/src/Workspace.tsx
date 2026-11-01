@@ -13,6 +13,9 @@ import { importFile, toFountain } from './importer';
 import { exportProject } from './backup';
 import { pickFiles, saveFile } from './native';
 import { exportScriptPdf } from './pdf';
+import { getLinks, syncProject } from './gsync';
+import { openExternal } from './update';
+import GoogleSyncModal from './GoogleSync';
 
 export type Updater = (fn: (p: Project) => Project) => void;
 export interface WsProps { p: Project; update: Updater; settings: Settings; setSettings: (s: Settings) => void; go: (tab: Tab, sceneId?: string) => void; focusScene?: string }
@@ -28,9 +31,25 @@ export default function Workspace({ id, onClose, settings, setSettings }: { id: 
   const toast = useToast();
   const saveTimer = useRef<number>();
   const latest = useRef<Project | null>(null);
+  const settingsRef = useRef(settings); settingsRef.current = settings;
+  const gTimer = useRef<number>();
+  const gDirty = useRef(false);
+  const [gs, setGs] = useState<{ st: 'idle' | 'busy' | 'ok' | 'err'; msg?: string; at?: number }>(() => ({ st: 'idle', at: getLinks(id)?.at }));
+  const [gOpen, setGOpen] = useState(false);
+  const gsync = useCallback(async (manual = false) => {
+    const g = settingsRef.current.gsync; const cur = latest.current;
+    if (!g || !cur) { if (manual) setGOpen(true); return; }
+    clearTimeout(gTimer.current); gDirty.current = false;
+    setGs({ st: 'busy' });
+    try { const l = await syncProject(g, cur); setGs({ st: 'ok', at: l.at }); if (manual) toast('구글 드라이브에 올렸어요.'); }
+    catch (e: any) { gDirty.current = true; setGs({ st: 'err', msg: String(e?.message || e) }); if (manual) toast('구글 저장 실패: ' + (e?.message || e)); }
+  }, []);
 
   useEffect(() => { loadProject(id).then(x => { if (!x) onClose(); else { setP(x); latest.current = x; } }); }, [id]);
-  const flush = useCallback(() => { if (latest.current) saveProject(latest.current); }, []);
+  const flush = useCallback(() => {
+    if (latest.current) saveProject(latest.current);
+    if (gDirty.current && settingsRef.current.gsync?.auto) gsync();
+  }, [gsync]);
   useEffect(() => {
     const h = () => { if (document.visibilityState === 'hidden') flush(); };
     document.addEventListener('visibilitychange', h);
@@ -44,6 +63,7 @@ export default function Workspace({ id, onClose, settings, setSettings }: { id: 
       latest.current = next;
       clearTimeout(saveTimer.current);
       saveTimer.current = window.setTimeout(() => saveProject(next), 700);
+      if (settingsRef.current.gsync?.auto) { gDirty.current = true; clearTimeout(gTimer.current); gTimer.current = window.setTimeout(() => gsync(), 60000); }
       return next;
     });
   }, []);
@@ -76,6 +96,8 @@ export default function Workspace({ id, onClose, settings, setSettings }: { id: 
         </div>
         <div className="grow" />
         {busy && <span className="muted small-t">{busy}</span>}
+        {settings.gsync && <button className="ghost small" title={gs.msg} onClick={() => gsync(true)}>
+          {gs.st === 'busy' ? '구글 올리는 중…' : gs.st === 'err' ? '구글 실패 ↻' : gs.at ? `구글 ✓ ${new Date(gs.at).toTimeString().slice(0, 5)}` : '구글에 올리기'}</button>}
         <select value={p.format} onChange={e => update(x => ({ ...x, format: e.target.value as Format }))} title="대본 양식">
           <option value="ko-stack">한국식 (위아래)</option>
           <option value="ko-side">한국식 (나란히)</option>
@@ -97,10 +119,18 @@ export default function Workspace({ id, onClose, settings, setSettings }: { id: 
           <button onClick={exportPdf}>대본 PDF로 저장</button>
           <button onClick={exportFountain}>Fountain으로 내보내기 (다른 시나리오 앱용)</button>
           <button onClick={exportSbk}>이 작품 백업 파일(.sbk) 만들기</button>
+          <button onClick={() => { setMenu(false); settings.gsync ? gsync(true) : setGOpen(true); }}>{settings.gsync ? '구글 문서·시트에 지금 올리기' : '구글 문서·시트 연결하기'}</button>
+          {getLinks(p.id) && <div className="row">
+            <button className="small" onClick={() => openExternal(getLinks(p.id)!.script)}>대본 문서 열기</button>
+            <button className="small" onClick={() => openExternal(getLinks(p.id)!.sheet)}>신 리스트 시트 열기</button>
+            <button className="small" onClick={() => openExternal(getLinks(p.id)!.desc)}>장면 묘사 문서 열기</button>
+          </div>}
+          {settings.gsync && <button className="small" onClick={() => { setMenu(false); setGOpen(true); }}>구글 연결 설정</button>}
           <p className="muted small-t">저장한 파일은 태블릿의 "문서/시나리오작업실" 폴더에 들어가고, 공유 창으로 드라이브나 메신저에 바로 보낼 수 있어요.</p>
           <p className="muted small-t">씬 {getScenes(p.lines).length}개 · 인물 {knownNames(p).length}명 · {p.lines.length}줄</p>
         </div>
       </Modal>}
+      {gOpen && <GoogleSyncModal settings={settings} setSettings={setSettings} onClose={() => setGOpen(false)} />}
     </div>
   );
 }

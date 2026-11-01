@@ -1,0 +1,98 @@
+// 시나리오 작업실 → 구글 문서/스프레드시트 자동 저장
+// 앱의 "구글 연결" 창에서 "코드 복사"를 누르면 KEY가 채워진 이 코드가 복사돼요.
+const KEY = '__KEY__';
+const FOLDER = '시나리오 작업실';
+
+function doGet() { return out({ ok: true, app: 'screenwriter-sync' }); }
+
+function doPost(e) {
+  try {
+    const d = JSON.parse(e.postData.contents);
+    if (KEY && d.key !== KEY) return out({ ok: false, error: '비밀 키가 맞지 않아요' });
+    if (d.ping) return out({ ok: true });
+    const folder = projectFolder(d.title);
+    const props = PropertiesService.getScriptProperties();
+    const ids = JSON.parse(props.getProperty('p:' + d.id) || '{}');
+
+    const scriptDoc = openOrCreateDoc(ids.script, d.title + ' - 대본', folder);
+    writeScript(scriptDoc, d.title, d.script);
+    const descDoc = openOrCreateDoc(ids.desc, d.title + ' - 장면 묘사', folder);
+    writeLines(descDoc, d.title + ' 장면 묘사', d.describeText);
+    const ss = openOrCreateSheet(ids.sheet, d.title + ' - 신 리스트', folder);
+    writeTab(ss, '신 리스트', d.scenes);
+    writeTab(ss, '컷 리스트', d.cuts);
+    writeTab(ss, '장면 묘사', d.describe);
+    const first = ss.getSheetByName('Sheet1') || ss.getSheetByName('시트1');
+    if (first && ss.getSheets().length > 1) ss.deleteSheet(first);
+
+    // 제목이 바뀌었으면 파일 이름도 맞추기
+    scriptDoc.setName(d.title + ' - 대본'); descDoc.setName(d.title + ' - 장면 묘사'); ss.rename(d.title + ' - 신 리스트');
+    const now = { script: scriptDoc.getId(), desc: descDoc.getId(), sheet: ss.getId() };
+    props.setProperty('p:' + d.id, JSON.stringify(now));
+    return out({ ok: true, script: scriptDoc.getUrl(), desc: descDoc.getUrl(), sheet: ss.getUrl() });
+  } catch (err) {
+    return out({ ok: false, error: String(err) });
+  }
+}
+
+function out(o) { return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); }
+
+function projectFolder(title) {
+  const roots = DriveApp.getFoldersByName(FOLDER);
+  const root = roots.hasNext() ? roots.next() : DriveApp.createFolder(FOLDER);
+  return root;
+}
+function alive(id) { try { const f = DriveApp.getFileById(id); return !f.isTrashed(); } catch (e) { return false; } }
+function openOrCreateDoc(id, name, folder) {
+  if (id && alive(id)) return DocumentApp.openById(id);
+  const doc = DocumentApp.create(name);
+  DriveApp.getFileById(doc.getId()).moveTo(folder);
+  return doc;
+}
+function openOrCreateSheet(id, name, folder) {
+  if (id && alive(id)) return SpreadsheetApp.openById(id);
+  const ss = SpreadsheetApp.create(name);
+  DriveApp.getFileById(ss.getId()).moveTo(folder);
+  return ss;
+}
+
+function writeScript(doc, title, paras) {
+  const body = doc.getBody();
+  body.clear();
+  body.setMarginLeft(56).setMarginRight(56);
+  const h = body.getParagraphs()[0];
+  h.setText(title).setHeading(DocumentApp.ParagraphHeading.TITLE).setAlignment(DocumentApp.HorizontalAlignment.CENTER);
+  const A = DocumentApp.HorizontalAlignment;
+  paras.forEach(function (x) {
+    const p = body.appendParagraph(x.text || ' ');
+    p.setHeading(DocumentApp.ParagraphHeading.NORMAL).setIndentStart(0).setIndentFirstLine(0).setAlignment(A.LEFT).setSpacingBefore(0).setSpacingAfter(4);
+    const t = p.editAsText(); t.setBold(false).setItalic(false).setFontSize(11);
+    if (x.t === 'scene') { t.setBold(true).setFontSize(12); p.setSpacingBefore(18); }
+    else if (x.t === 'character') { t.setBold(true); p.setIndentStart(150).setIndentFirstLine(150).setSpacingBefore(8).setSpacingAfter(0); }
+    else if (x.t === 'dialogue') { p.setIndentStart(80).setIndentFirstLine(80).setIndentEnd(80); }
+    else if (x.t === 'paren') { t.setItalic(true); p.setIndentStart(115).setIndentFirstLine(115).setSpacingAfter(0); }
+    else if (x.t === 'transition') { p.setAlignment(A.RIGHT); }
+    else if (x.t === 'shot') { t.setBold(true); }
+  });
+  doc.saveAndClose();
+}
+function writeLines(doc, title, lines) {
+  const body = doc.getBody();
+  body.clear();
+  body.getParagraphs()[0].setText(title).setHeading(DocumentApp.ParagraphHeading.TITLE);
+  lines.forEach(function (l) {
+    const p = body.appendParagraph(l || ' ');
+    p.setHeading(/^S#\d+/.test(l) ? DocumentApp.ParagraphHeading.HEADING2 : DocumentApp.ParagraphHeading.NORMAL);
+  });
+  doc.saveAndClose();
+}
+function writeTab(ss, name, rows) {
+  const sh = ss.getSheetByName(name) || ss.insertSheet(name);
+  sh.clear();
+  if (!rows || !rows.length) return;
+  const w = Math.max.apply(null, rows.map(function (r) { return r.length; }));
+  const data = rows.map(function (r) { const a = r.map(function (v) { return v === null || v === undefined ? '' : v; }); while (a.length < w) a.push(''); return a; });
+  sh.getRange(1, 1, data.length, w).setValues(data).setWrap(true).setVerticalAlignment('top');
+  sh.getRange(1, 1, 1, w).setFontWeight('bold').setBackground('#f1f1ee');
+  sh.setFrozenRows(1);
+}

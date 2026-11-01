@@ -6,6 +6,7 @@ import { ANGLES, MOVES, SHOT_SIZES, termLabel } from './shots';
 import { Modal, useToast } from './ui';
 import { toCSV } from './util';
 import { saveFile } from './native';
+import { cutRows, sceneRows } from './exports';
 
 export default function SceneListTab({ p, update, go }: WsProps) {
   const toast = useToast();
@@ -18,22 +19,8 @@ export default function SceneListTab({ p, update, go }: WsProps) {
   const setMeta = (sid: string, k: 'summary' | 'notes', v: string) => update(x => ({ ...x, scenes: { ...x.scenes, [sid]: { ...x.scenes[sid], [k]: v } } }));
 
   const total = [...allCuts.values()].reduce((a, c) => a + c.length, 0);
-  const exportScenes = async () => {
-    const rows: unknown[][] = [['S#', '장소', '시간', '등장인물', '내용', '컷수', '쪽', '예상 초', '대사 수', '비고']];
-    for (const s of scenes) {
-      const st = sceneStats(s, names); const cuts = allCuts.get(s.id) || [];
-      rows.push([s.num, s.place, s.time, st.chars.join(', '), p.scenes[s.id]?.summary || autoSummary(s), cuts.length, estimatePages(s.lines).toFixed(1), cuts.reduce((a, c) => a + c.seconds, 0), st.dialogueCount, p.scenes[s.id]?.notes || '']);
-    }
-    toast('저장했어요: ' + await saveFile(new Blob([toCSV(rows)], { type: 'text/csv' }), `${p.title}-신리스트.csv`));
-  };
-  const exportCuts = async () => {
-    const rows: unknown[][] = [['컷', 'S#', '장소', '시간', '샷 크기', '앵글', '움직임', '인물', '화면 내용', '대사', '초', '그림 칸']];
-    for (const s of scenes) for (const c of allCuts.get(s.id) || []) {
-      const v = cutValues(p, c);
-      rows.push([c.label, s.num, s.place, s.time, v.shot || '', termLabel(ANGLES, v.angle), termLabel(MOVES, v.move), v.chars.join(', '), p.cuts[c.key]?.desc || c.action, c.dialogues.map(d => `${d.speaker}: ${d.text}`).join(' / '), c.seconds, '']);
-    }
-    toast('저장했어요: ' + await saveFile(new Blob([toCSV(rows)], { type: 'text/csv' }), `${p.title}-컷리스트.csv`));
-  };
+  const exportScenes = async () => { toast('저장했어요: ' + await saveFile(new Blob([toCSV(sceneRows(p))], { type: 'text/csv' }), `${p.title}-신리스트.csv`)); };
+  const exportCuts = async () => { toast('저장했어요: ' + await saveFile(new Blob([toCSV(cutRows(p))], { type: 'text/csv' }), `${p.title}-컷리스트.csv`)); };
   const shown = scenes.filter(s => !filter || (s.heading + ' ' + (p.scenes[s.id]?.summary || '')).includes(filter));
   return (
     <div className="page"><div className="page-inner">

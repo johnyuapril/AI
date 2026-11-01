@@ -18,7 +18,7 @@ export default function App() {
   return (
     <ToastProvider>
       {openId ? <Workspace id={openId} onClose={() => open(null)} settings={settings} setSettings={updSettings} />
-        : <Home onOpen={open} />}
+        : <Home onOpen={open} settings={settings} setSettings={updSettings} />}
     </ToastProvider>
   );
 }

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import type { ProjectSummary } from './types';
+import type { ProjectSummary, Settings } from './types';
+import GoogleSyncModal from './GoogleSync';
 import { deleteProject, listProjects, loadProject, newProject, saveProject } from './store';
 import { importFile } from './importer';
 import { exportAll, importBackup } from './backup';
@@ -8,7 +9,8 @@ import { useToast } from './ui';
 import { currentVersion, installUpdate, latestRelease, openExternal, RELEASES_PAGE, type Latest } from './update';
 import { isNative } from './native';
 
-export default function Home({ onOpen }: { onOpen: (id: string) => void }) {
+export default function Home({ onOpen, settings, setSettings }: { onOpen: (id: string) => void; settings: Settings; setSettings: (s: Settings) => void }) {
+  const [gOpen, setGOpen] = useState(false);
   const [list, setList] = useState<ProjectSummary[]>([]);
   const [busy, setBusy] = useState('');
   const toast = useToast();
@@ -81,6 +83,7 @@ export default function Home({ onOpen }: { onOpen: (id: string) => void }) {
           <div className="row">
             {hasNew ? <button className="primary" onClick={() => doUpdate(hasNew)}>업데이트 v{hasNew.name}</button>
               : <button onClick={() => check(true)}>업데이트 확인</button>}
+            <button onClick={() => setGOpen(true)}>{settings.gsync ? '구글 연결됨' : '구글 연결'}</button>
             <button onClick={restore}>백업 불러오기</button>
             <button onClick={backupAll}>전체 백업</button>
             <button onClick={importScript}>대본 불러오기</button>
@@ -106,6 +109,7 @@ export default function Home({ onOpen }: { onOpen: (id: string) => void }) {
           ))}
         </div>
       </div>
+      {gOpen && <GoogleSyncModal settings={settings} setSettings={setSettings} onClose={() => setGOpen(false)} />}
     </div>
   );
 }
