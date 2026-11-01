@@ -10,7 +10,7 @@
 2. 키 파일을 글자로 바꾸기
    - Windows PowerShell: `[Convert]::ToBase64String([IO.File]::ReadAllBytes("release.jks")) | Set-Clipboard`
    - Mac/Linux: `base64 -w0 release.jks` (Mac은 `base64 -i release.jks`)
-3. GitHub → AI2 저장소 → Settings → Secrets and variables → Actions → New repository secret
+3. GitHub → AI 저장소 → Settings → Secrets and variables → Actions → New repository secret
    - `ANDROID_KEYSTORE_BASE64` : 2번에서 복사한 글자
    - `ANDROID_KEYSTORE_PASSWORD` : 1번에서 정한 비밀번호
 4. Actions 탭에서 "안드로이드 APK 만들기"를 다시 실행한다.

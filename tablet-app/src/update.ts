@@ -8,7 +8,7 @@ interface AppUpdater {
 }
 const Updater = registerPlugin<AppUpdater>('AppUpdater');
 
-const REPO = 'johnyuapril/AI2';
+const REPO = 'johnyuapril/AI';
 export const RELEASES_PAGE = `https://github.com/${REPO}/releases/latest`;
 export const BUILD = Number(import.meta.env.VITE_BUILD || 0);
 
