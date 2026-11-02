@@ -207,8 +207,8 @@ function AiSplitModal({ p, scene, scenes, names, onClose, onApply }: { p: Projec
     try { const t = await navigator.clipboard.readText(); if (t) { setText(t); return; } } catch { /* */ }
     toast('아래 칸을 길게 눌러 붙여넣기 해 주세요.');
   };
-  const [per, setPer] = useState(() => { try { return Number(localStorage.getItem('ai-split-cuts')) || 8; } catch { return 8; } });
-  const setPerSave = (n: number) => { setPer(n); try { localStorage.setItem('ai-split-cuts', String(n)); } catch { /* */ } };
+  const [per, setPer] = useState(() => { try { return Number(localStorage.getItem('ai-split-scenes')) || 3; } catch { return 3; } });
+  const setPerSave = (n: number) => { setPer(n); try { localStorage.setItem('ai-split-scenes', String(n)); } catch { /* */ } };
   const request = () => scene ? buildCutSplitRequest(p, scene) : buildFullCutSplitRequest(p, scenes, per);
   const copyNext = async () => { if (!next) return; toast(await copyText(buildNextRequest(next.scene, next.cut, per)) ? '복사했어요. AI 대화창에 붙여 넣으세요.' : '복사하지 못했어요.'); };
   const loadFile = async () => { const [f] = await pickFiles('.txt,.md,text/plain,text/markdown'); if (f) setText(await f.text()); };
@@ -221,10 +221,10 @@ function AiSplitModal({ p, scene, scenes, names, onClose, onApply }: { p: Projec
   };
   return <Modal wide title={scene ? `S#${scene.num} AI로 컷 나누기` : 'AI로 전체 컷 나누기 (영화감독 역할)'} onClose={onClose}>
     <div style={{ display: 'grid', gap: 10 }}>
-      {!scene && <p className="muted small-t" style={{ margin: 0 }}>시나리오 전체를 파일로 주고 "영화감독"으로서 모든 씬을 컷으로 나누게 해요. <b>장면 묘사(설정표와 컷 화면 묘사)도 같이 받아서</b> 장면 묘사 탭에 바로 들어가요. 감독으로서 꼼꼼히 쓰게 하려고 <b>한 번에 컷 8개씩</b> 받아요(씬 중간에서 끊겨도 이어 붙어요). 답을 붙여 넣고 "바꾸기" → <b>"다음" 요청 복사</b> → AI에 붙여 넣기 → 답 붙여넣기.</p>}
-      {!scene && <div className="row"><span className="small-t">한 번에 받을 컷</span>
-        {[5, 8, 12].map(n => <button key={n} className={'small' + (per === n ? ' primary' : '')} onClick={() => setPerSave(n)}>{n}컷씩</button>)}
-        <span className="muted small-t">많이 받을수록 AI가 초벌처럼 줄여 써요. 8컷이 적당해요</span></div>}
+      {!scene && <p className="muted small-t" style={{ margin: 0 }}>시나리오 전체를 파일로 주고 "영화감독"으로서 모든 씬을 컷으로 나누게 해요. <b>장면 묘사(설정표와 컷 화면 묘사)도 같이 받아서</b> 장면 묘사 탭에 바로 들어가요. <b>한 번에 씬 몇 개씩</b> 받아요(답이 씬 중간에서 끊겨도 이어 붙어요). 답을 붙여 넣고 "바꾸기" → <b>"다음" 요청 복사</b> → AI에 붙여 넣기 → 답 붙여넣기.</p>}
+      {!scene && <div className="row"><span className="small-t">한 번에 받을 씬</span>
+        {[1, 3, 5, 8].map(n => <button key={n} className={'small' + (per === n ? ' primary' : '')} onClick={() => setPerSave(n)}>{n}씬씩</button>)}
+        <span className="muted small-t">많이 받을수록 빠르지만 AI가 묘사를 줄여 쓸 수 있어요</span></div>}
       {!scene && <div className="row">
         <b>1.</b> <button className="primary" onClick={async () => { try { await saveFile(new Blob([fullScriptText(p, scenes)], { type: 'text/plain' }), scriptFileName(p)); } catch (e: any) { toast('파일 저장 실패: ' + (e?.message || e)); } }}>시나리오 파일 보내기</button>
         <span className="muted small-t">→ 공유 창에서 ChatGPT를 고르거나, 저장된 파일(문서/시나리오작업실)을 대화창에 첨부해요</span>

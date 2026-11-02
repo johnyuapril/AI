@@ -133,8 +133,8 @@ const DIRECTOR_RULES = [
   '- 씬마다 첫 컷 앞에 [설정표 씬번호]로 씬 내내 변하지 않는 장소 모습, 시간·날씨·조명, 인물별 생김새·옷차림·소지품을 정리해.',
   '- "화면"은 그 컷 한 순간에 카메라에 보이는 것만, 그림을 그릴 수 있을 만큼 2~4문장으로 구체적으로: 화면 안 배치(앞·뒤, 왼쪽·오른쪽), 인물마다 위치·방향·자세·시선·손동작·표정, 누가 누구의 어디를 어떻게 잡는지 같은 접촉. 감정, 냄새, 소리, 비유는 쓰지 말고, 설정표의 옷차림·소품을 지켜.',
   '- 연출 의도가 있으면 "연출:" 한 줄로 짧게 (왜 이 샷인지).',
-  '- 이건 초벌이 아니라 최종 콘티야. 품질을 지키기 위해 한 번에 컷 8개씩만 답해. 씬 중간에서 끊겨도 괜찮아. 내가 "다음"이라고 하면 바로 이어지는 컷부터 같은 자세함으로 8개를 더 답해. (이어지는 씬의 설정표는 그 씬 첫 컷 앞에서 한 번만)',
-  '- 8컷을 채우지 못하고 끝나면 마지막에 "끝"이라고 써.',
+  '- 이건 초벌이 아니라 최종 콘티야. 한 번에 씬 3개씩 답해. 씬 수가 많다고 컷을 줄이거나 묘사를 짧게 하지 말고, 모든 컷을 같은 자세함으로. 내가 "다음"이라고 하면 이어지는 씬 3개를 같은 자세함으로 답해. (설정표는 씬마다 그 씬 첫 컷 앞에서 한 번만)',
+  '- 답이 너무 길어서 중간에 끊길 것 같으면 씬이 끝나는 곳에서 멈추고 "계속"이라고 써. 시나리오의 마지막 씬까지 끝나면 마지막에 "끝"이라고 써.',
 ];
 const ANSWER_FORMAT = (n: number) => [
   '[답하는 형식] 표로 쓰지 말고, 아래 모양 그대로. 다른 말은 붙이지 마.',
@@ -186,19 +186,20 @@ export function fullScriptText(p: Project, scenes: Scene[]): string {
 }
 export const scriptFileName = (p: Project) => `${(p.title || '시나리오').replace(/[\\/:*?"<>|]/g, '_')}_시나리오.txt`;
 /** 시나리오는 파일로 첨부하고, 이 요청 문장만 붙여 넣음 */
-export function buildFullCutSplitRequest(p: Project, scenes: Scene[], per = 8): string {
+export function buildFullCutSplitRequest(p: Project, scenes: Scene[], per = 3): string {
   const looks = charList(p, p.lines);
   const first = scenes[0]?.num || 1;
-  const parts = [...DIRECTOR_RULES.map(r => r.replace(/컷 8개/g, `컷 ${per}개`).replace(/8개를/g, `${per}개를`).replace(/8컷/g, `${per}컷`)),
+  const parts = [...DIRECTOR_RULES.map(r => r.replace(/씬 3개/g, `씬 ${per}개`)),
     `- 시나리오 전체는 첨부한 파일 "${scriptFileName(p)}"에 있어. 파일을 끝까지 읽고 이야기 전체를 이해한 다음 작업해 줘. (씬 ${scenes.length}개)`,
     '', `[작품] ${p.title}`];
   if (looks.length) parts.push('', '[등장인물]', ...looks);
-  parts.push('', ...ANSWER_FORMAT(first), '', `지금은 S#${first}의 첫 컷부터 컷 ${per}개만 답해 줘.`);
+  const last = scenes[Math.min(per, scenes.length) - 1]?.num || first;
+  parts.push('', ...ANSWER_FORMAT(first), '', `지금은 S#${first}부터 씬 ${per}개(S#${first}~S#${last})만 답해 줘.`);
   return parts.join('\n');
 }
-/** 이어 받기 요청 */
+/** 이어 받기 요청 (마지막으로 넣은 컷 다음부터 씬 per개) */
 export function buildNextRequest(scene: number, cut: number, per: number): string {
-  return `다음. [${scene}-${cut}] 다음 컷부터 (그 씬이 끝났으면 다음 씬의 설정표와 첫 컷부터) 컷 ${per}개를 앞과 같은 형식, 같은 자세함으로 이어서 답해 줘. 감독으로서 컷마다 충분히 검토해서, 초벌·요약 말고 최종 콘티 수준으로.`;
+  return `다음. 지난 답은 [${scene}-${cut}]까지 받았어. S#${scene}가 그 컷에서 끝났으면 다음 씬의 설정표와 첫 컷부터, 아직 안 끝났으면 [${scene}-${cut + 1}]부터 이어서, 씬 ${per}개 분량을 앞과 같은 형식, 같은 자세함으로 답해 줘. 감독으로서 컷마다 충분히 검토해서, 초벌·요약 말고 최종 콘티 수준으로.`;
 }
 
 const stripMd = (s: string) => s.replace(/\*\*|__|`/g, '').replace(/^\s*[-*•]\s+/, '').trim();
