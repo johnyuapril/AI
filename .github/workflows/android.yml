@@ -1,4 +1,5 @@
-name: 안드로이드 APK 만들기
+# 파일 이름(android.yml)은 바꾸지 말 것: 바꾸면 빌드 번호가 1부터 다시 시작해서 태블릿 업데이트가 안 된다.
+name: 앱 만들기 (안드로이드 + 윈도우)
 
 on:
   push:
@@ -13,7 +14,7 @@ permissions:
   contents: write
 
 jobs:
-  build:
+  android:
     if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     defaults:
@@ -65,14 +66,60 @@ jobs:
         with:
           name: apk
           path: tablet-app/*.apk
+
+  windows:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: tablet-app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            tablet-app/package-lock.json
+            tablet-app/desktop/package-lock.json
+      - run: npm ci
+      - run: npm run build
+        env:
+          VITE_BUILD: ${{ github.run_number }}
+      - run: npm ci
+        working-directory: tablet-app/desktop
+      - name: 윈도우 설치 파일 빌드
+        working-directory: tablet-app/desktop
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: |
+          npm run copy-web
+          npx electron-builder --win --x64 --publish never -c.extraMetadata.version=1.0.${{ github.run_number }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: exe
+          path: tablet-app/desktop/release/*.exe
+
+  release:
+    # 브랜치에서 시험으로 돌린 빌드는 릴리스로 올리지 않는다. 윈도우 빌드가 실패해도 안드로이드는 올린다.
+    needs: [android, windows]
+    if: always() && needs.android.result == 'success' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+          merge-multiple: true
+      - run: ls -la out
       - name: 릴리스로 올리기
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.0.${{ github.run_number }}
           name: 시나리오 작업실 v1.0.${{ github.run_number }}
           body: |
-            갤럭시 탭에서 아래 .apk 파일을 눌러 받은 뒤 열면 설치돼요.
+            갤럭시 탭: 아래 .apk 파일을 눌러 받은 뒤 열면 설치돼요.
+            윈도우: 아래 Screenwriter-Setup-….exe 를 받아 실행하면 설치돼요. "Windows의 PC 보호" 창이 뜨면 "추가 정보" → "실행"을 눌러 주세요.
             이전 버전 위에 그대로 덮어 설치되고, 작품은 지워지지 않아요.
             커밋: ${{ github.sha }}
-          files: tablet-app/*.apk
+          files: out/*
           make_latest: true

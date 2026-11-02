@@ -1,0 +1,35 @@
+{
+  "name": "screenwriter-desktop",
+  "productName": "시나리오 작업실",
+  "private": true,
+  "version": "1.0.0",
+  "description": "시나리오 작업실 윈도우용",
+  "author": "johnyuapril",
+  "main": "main.cjs",
+  "scripts": {
+    "copy-web": "node -e \"const fs=require('fs');fs.rmSync('web',{recursive:true,force:true});fs.cpSync('../dist','web',{recursive:true})\"",
+    "start": "npm run copy-web && electron .",
+    "dist": "npm run copy-web && electron-builder --win --x64 --publish never"
+  },
+  "devDependencies": {
+    "electron": "^38.4.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.johnyuapril.screenwriter",
+    "productName": "시나리오 작업실",
+    "artifactName": "Screenwriter-Setup-${version}.${ext}",
+    "files": ["main.cjs", "preload.cjs", "web/**/*", "package.json"],
+    "directories": { "output": "release" },
+    "win": { "target": [{ "target": "nsis", "arch": ["x64"] }], "icon": "icon.png" },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "시나리오 작업실",
+      "runAfterFinish": true,
+      "deleteAppDataOnUninstall": false
+    }
+  }
+}

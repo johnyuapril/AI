@@ -59,7 +59,7 @@ export default function PromptTab(props: WsProps) {
           </div>
           <div className="row" style={{ marginTop: 6 }}>
             <button className="small" onClick={() => pickFiles('image/*').then(f => f[0] && setStyleImg(f[0]))}>바꾸기</button>
-            {settings.styleImg && <button className="small" onClick={async () => { const b = await getImageBlob(settings.styleImg!); if (b) shareImage(b, 'style.jpg'); }}>외부 AI로 보내기</button>}
+            {settings.styleImg && <button className="small" onClick={async () => { const b = await getImageBlob(settings.styleImg!); if (b) { const m = await shareImage(b, 'style.jpg'); if (m) toast(m); } }}>외부 AI로 보내기</button>}
             {settings.styleImg && <button className="small danger" onClick={() => setSettings({ ...settings, styleImg: undefined })}>빼기</button>}
           </div>
           <div className="muted small-t" style={{ marginTop: 4 }}>새 대화를 시작할 때 이 그림을 함께 보내고 "이 그림체로"라고 하면 좋아요.</div>

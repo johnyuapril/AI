@@ -7,7 +7,7 @@ import { exportAll, importBackup } from './backup';
 import { pickFiles, saveFile } from './native';
 import { useToast } from './ui';
 import { currentVersion, installUpdate, latestRelease, openExternal, RELEASES_PAGE, type Latest } from './update';
-import { isNative } from './native';
+import { isDesktop, isNative } from './native';
 
 export default function Home({ onOpen, settings, setSettings }: { onOpen: (id: string) => void; settings: Settings; setSettings: (s: Settings) => void }) {
   const [gOpen, setGOpen] = useState(false);
@@ -28,8 +28,12 @@ export default function Home({ onOpen, settings, setSettings }: { onOpen: (id: s
   };
   useEffect(() => { check(); }, []);
   const doUpdate = async (l: Latest) => {
-    if (!isNative()) { openExternal(l.url); return; }
+    if (!isNative() && !isDesktop()) { openExternal(l.url); return; }
     setBusy('새 버전 받는 중…');
+    if (isDesktop()) {
+      try { await installUpdate(l.url); toast('설치가 끝나면 앱이 다시 켜져요.'); } catch (e: any) { toast(String(e?.message || e)); }
+      setBusy(''); return;
+    }
     try { await installUpdate(l.url); toast('설치 화면에서 "업데이트"를 눌러 주세요.'); }
     catch (e: any) {
       const m = String(e?.message || e);
@@ -93,7 +97,7 @@ export default function Home({ onOpen, settings, setSettings }: { onOpen: (id: s
         {busy && <p className="muted">{busy}</p>}
         {!list.length && <div className="box"><div className="box-b">
           <p><b>아직 작품이 없어요.</b> "새 작품"으로 바로 쓰거나, "대본 불러오기"로 PDF·한글(HWP/HWPX)·워드·텍스트 대본을 불러오세요.</p>
-          <p className="muted small-t">작품은 이 태블릿 안에 저장돼요. 다른 기기로 옮기거나 지켜 두려면 "전체 백업"으로 파일을 만들어 두세요.</p>
+          <p className="muted small-t">작품은 이 기기 안에 저장돼요. 다른 기기로 옮기거나 지켜 두려면 "전체 백업"으로 파일을 만들어 두세요.</p>
         </div></div>}
         <div className="cards">
           {list.map(s => (

@@ -4,6 +4,26 @@ import { Share } from '@capacitor/share';
 import { downloadBlob } from './util';
 import { AppNative } from './plugin';
 
+/** 윈도우용(desktop/preload.cjs)이 넣어 주는 기능. 안드로이드·브라우저에서는 없음 */
+export interface DesktopBridge {
+  info(): Promise<{ version: string; platform: string; saveDir: string }>;
+  saveFile(name: string, data: Uint8Array, reveal?: boolean): Promise<string>;
+  saveAs(name: string, data: Uint8Array): Promise<string>;
+  copyImage(data: Uint8Array): Promise<boolean>;
+  openAiSide(url: string): Promise<void>;
+  openExternal(url: string): Promise<void>;
+  showItem(path: string): Promise<void>;
+  http(o: { url: string; method: string; headers: Record<string, string>; body: string }): Promise<{ status: number; text: string }>;
+  installUpdate(url: string): Promise<void>;
+  onAiDownloaded(cb: (path: string) => void): void;
+}
+export const desktop: DesktopBridge | undefined = (globalThis as any).desktop;
+/** 윈도우용 앱에서 실행 중인지 */
+export const isDesktop = () => !!desktop;
+/** 지금 플랫폼: 'android' | 'windows' | 'web' */
+export const platform = (): 'android' | 'windows' | 'web' => isNative() ? 'android' : isDesktop() ? 'windows' : 'web';
+const bytes = async (b: Blob) => new Uint8Array(await b.arrayBuffer());
+
 const mimeOf = (name: string) => /\.pdf$/i.test(name) ? 'application/pdf' : /\.(png)$/i.test(name) ? 'image/png' : /\.(jpe?g)$/i.test(name) ? 'image/jpeg' : /\.(txt|fountain|csv)$/i.test(name) ? 'text/plain' : 'application/octet-stream';
 /** 받는 앱을 옆 화면(분할 화면)에 열고, 안 되면 보통 공유 창 */
 async function shareSide(uri: string, name: string, title: string) {
@@ -20,6 +40,7 @@ export const AI_APPS: AiApp[] = [
 /** AI를 옆 화면에 열기 (앱이 없으면 웹) */
 export async function openAiSide(id = 'chatgpt') {
   const a = AI_APPS.find(x => x.id === id) || AI_APPS[0];
+  if (desktop) { await desktop.openAiSide(a.url); return; }
   if (!isNative()) { window.open(a.url, '_blank'); return; }
   try { await AppNative.openSide({ pkg: a.pkg, url: a.url }); } catch { window.open(a.url, '_blank'); }
 }
@@ -34,8 +55,10 @@ function blobToBase64(b: Blob): Promise<string> {
   });
 }
 
-/** 파일 저장: 태블릿에서는 Documents/시나리오작업실 에 저장하고 공유 창을 띄움 */
+/** 파일 저장: 태블릿에서는 Documents/시나리오작업실 에 저장하고 공유 창을 띄움.
+ *  윈도우에서는 문서\시나리오작업실 에 저장하고 탐색기로 보여 줌(AI 창에 끌어다 놓으면 됨) */
 export async function saveFile(blob: Blob, name: string, share = true): Promise<string> {
+  if (desktop) return desktop.saveFile(name, await bytes(blob), share);
   if (!isNative()) { downloadBlob(blob, name); return name; }
   const data = await blobToBase64(blob);
   const path = '시나리오작업실/' + name;
@@ -47,7 +70,14 @@ export async function saveFile(blob: Blob, name: string, share = true): Promise<
 }
 
 /** 이미지 공유(외부 AI 앱에 화풍 그림 보내기) */
-export async function shareImage(blob: Blob, name: string) {
+export async function shareImage(blob: Blob, name: string): Promise<string | void> {
+  if (desktop) {
+    // 윈도우: 그림을 클립보드에 넣어 AI 창에 Ctrl+V 로 붙여넣게 하고, 파일로도 저장
+    const data = await bytes(blob);
+    const ok = await desktop.copyImage(data).catch(() => false);
+    await desktop.saveFile(name, data, !ok);
+    return ok ? '그림을 복사했어요. AI 창에서 Ctrl+V 로 붙여넣으세요.' : '그림 파일을 저장했어요. AI 창에 끌어다 놓으세요.';
+  }
   if (!isNative()) { downloadBlob(blob, name); return; }
   const data = await blobToBase64(blob);
   const r = await Filesystem.writeFile({ path: name, data, directory: Directory.Cache });

@@ -11,7 +11,7 @@ import AnalysisTab from './AnalysisTab';
 import { Modal, useToast } from './ui';
 import { importFile, toFountain } from './importer';
 import { exportProject } from './backup';
-import { openAiSide, pickFiles, saveFile } from './native';
+import { isDesktop, openAiSide, pickFiles, saveFile } from './native';
 import { exportScriptPdf } from './pdf';
 import { getLinks, syncProject } from './gsync';
 import { openExternal } from './update';
@@ -127,7 +127,7 @@ export default function Workspace({ id, onClose, settings, setSettings }: { id: 
             <button className="small" onClick={() => openExternal(getLinks(p.id)!.desc)}>장면 묘사 문서 열기</button>
           </div>}
           {settings.gsync && <button className="small" onClick={() => { setMenu(false); setGOpen(true); }}>구글 연결 설정</button>}
-          <p className="muted small-t">저장한 파일은 태블릿의 "문서/시나리오작업실" 폴더에 들어가고, 공유 창으로 드라이브나 메신저에 바로 보낼 수 있어요.</p>
+          <p className="muted small-t">{isDesktop() ? '저장한 파일은 "문서\\시나리오작업실" 폴더에 들어가고, 탐색기 창이 열려요. AI 창에 끌어다 놓으면 돼요.' : '저장한 파일은 태블릿의 "문서/시나리오작업실" 폴더에 들어가고, 공유 창으로 드라이브나 메신저에 바로 보낼 수 있어요.'}</p>
           <p className="muted small-t">씬 {getScenes(p.lines).length}개 · 인물 {knownNames(p).length}명 · {p.lines.length}줄</p>
         </div>
       </Modal>}

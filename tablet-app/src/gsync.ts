@@ -2,7 +2,7 @@ import type { GSync, Project } from './types';
 import { describeText, sceneTree, scriptParas } from './exports';
 import code from './google-sync.gs.txt?raw';
 import { CapacitorHttp } from '@capacitor/core';
-import { isNative } from './native';
+import { desktop, isNative } from './native';
 
 export const CODE_VERSION = 4;
 const OLD = '구글 쪽 코드가 예전 버전이에요. 앱의 "구글 연결" 창에서 코드를 다시 복사해 붙여넣고, 배포 → 배포 관리 → 연필 → 버전: 새 버전 → 배포를 눌러 주세요.';
@@ -37,6 +37,10 @@ async function post(g: GSync, body: object): Promise<any> {
       data, responseType: 'text', connectTimeout: 30000, readTimeout: 360000,
     });
     j = parse(r.status, r.data);
+  } else if (desktop) {
+    // 윈도우용도 앱 안에서 직접 보내서 구글 오류 내용을 읽음
+    const r = await desktop.http({ url: g.url.trim(), method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: data });
+    j = parse(r.status, r.text);
   } else {
     // text/plain 으로 보내야 구글 앱스 스크립트가 CORS 사전 요청 없이 받아요
     const r = await fetch(g.url.trim(), { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: data, redirect: 'follow' });
