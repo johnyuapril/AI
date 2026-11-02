@@ -96,10 +96,14 @@ jobs:
         run: |
           npm run copy-web
           npx electron-builder --win --x64 --publish never --config.extraMetadata.version=1.0.${{ github.run_number }}
+          # 브라우저가 .exe 다운로드를 막을 때를 위해 zip 으로도 (업데이트 버튼은 .exe 를 씀)
+          cd release && 7z a "Screenwriter-Setup-1.0.${{ github.run_number }}.zip" "Screenwriter-Setup-1.0.${{ github.run_number }}.exe"
       - uses: actions/upload-artifact@v4
         with:
           name: exe
-          path: tablet-app/desktop/release/*.exe
+          path: |
+            tablet-app/desktop/release/*.exe
+            tablet-app/desktop/release/*.zip
 
   release:
     # 브랜치에서 시험으로 돌린 빌드는 릴리스로 올리지 않는다. 윈도우 빌드가 실패해도 안드로이드는 올린다.
@@ -119,7 +123,7 @@ jobs:
           name: 시나리오 작업실 v1.0.${{ github.run_number }}
           body: |
             갤럭시 탭: 아래 .apk 파일을 눌러 받은 뒤 열면 설치돼요.
-            윈도우: 아래 Screenwriter-Setup-….exe 를 받아 실행하면 설치돼요. "Windows의 PC 보호" 창이 뜨면 "추가 정보" → "실행"을 눌러 주세요.
+            윈도우: 아래 Screenwriter-Setup-….exe 를 받아 실행하면 설치돼요. 브라우저가 .exe 를 막으면 같은 이름의 .zip 을 받아 압축을 풀고 안의 .exe 를 실행하세요. "Windows의 PC 보호" 창이 뜨면 "추가 정보" → "실행"을 눌러 주세요.
             이전 버전 위에 그대로 덮어 설치되고, 작품은 지워지지 않아요.
             커밋: ${{ github.sha }}
           files: out/*
