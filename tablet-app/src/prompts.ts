@@ -32,7 +32,8 @@ export function buildDescribeRequest(p: Project, scene: Scene, cuts: Cut[], s: S
     '',
     `[씬] S#${scene.num}. ${scene.heading}`,
   ];
-  parts.push(...bibleBlock(p));
+  parts.push(...bibleBlock(p, scene));
+  if (p.debate?.trim()) parts.push('', '- 토론 결론이 있으니 컷 묘사는 그 결론의 인물 몸짓·표정·위치·공간을 그대로 살려, 컷마다 3~5문장으로 정확하고 자세히. 일반적인 표현(예: 슬픈 표정)으로 뭉뚱그리지 말고 눈·입·손·어깨가 어떻게 되는지 구체적으로.');
   if (looks.length) parts.push('', '[인물 외모 (정해 둔 설정, 꼭 지켜 줘)]', ...looks);
   if (!p.bible?.trim()) parts.push('', '[전체 씬 흐름 (앞뒤 이야기 참고)]', ...sceneOutline(p, scene.num));
   if (meta.setTable?.trim()) parts.push('', '[지금 설정표 (고쳐 쓴 내용이니 지켜 줘)]', meta.setTable.trim());
@@ -185,9 +186,10 @@ function charList(p: Project, lines: { text: string }[]): string[] {
   return p.chars.filter(ch => lines.some(l => l.text.includes(ch.name))).map(ch => `${ch.name}${ch.look.trim() ? ': ' + ch.look.trim() : ''}`);
 }
 /** 작품 설정 (있으면 모든 요청에) */
-function bibleBlock(p: Project): string[] {
+function bibleBlock(p: Project, scene?: Scene): string[] {
   const out: string[] = [];
-  if (p.debate?.trim()) out.push('', '[3인 토론 결론 (감독·작가·평론가가 합의한 이 시나리오의 해석과 화면 그림. 인물의 생김새·몸짓·표정, 공간, 톤앤무드, 카메라 언어를 이대로 따라)]', p.debate.trim());
+  const deb = debateFor(p, scene);
+  if (deb) out.push('', '[3인 토론 결론 (감독·작가·평론가가 합의한 이 시나리오의 해석과 화면 그림. 인물의 생김새·몸짓·표정, 공간, 톤앤무드, 카메라 언어를 이대로 따르고, [씬] 항목의 순간·위치·동작·표정은 컷 묘사에 빠짐없이 살려)]', deb);
   if (p.bible?.trim()) out.push('', '[작품 설정 (시나리오 전체에서 정리한 것, 꼭 지켜)]', p.bible.trim());
   return out;
 }
@@ -218,32 +220,90 @@ export function buildDebateRequest(p: Project): string {
     '  3부. 감정의 흐름과 표정·행동: 씬마다 인물의 감정이 어떻게 바뀌고, 그 순간 얼굴(눈, 입, 눈썹)과 몸(손, 어깨, 발)이 어떻게 움직이는지. 대사 없는 순간의 반응까지',
     '  4부. 공간과 화면: 장소마다 구조, 크기, 물건 배치, 낡음과 질감, 빛의 방향과 색, 날씨와 시간대, 소리. 인물이 공간 안 어디에 서고 어떻게 움직이는지',
     '  5부. 씬별 화면 상상과 카메라: 중요한 순간마다 화면에 무엇이 어떻게 보여야 하는지, 표정과 행동을 가장 잘 보여 줄 거리·앵글·카메라 위치, 꼭 필요한 컷(손·소품 인서트, 듣는 사람 리액션, 인물 시점), 전체의 톤앤무드',
-    '- 다 끝나면 맨 마지막에 [토론 결론]을 아래 모양으로 정리해. (이 결론을 그대로 장면 묘사와 컷 나누기에 쓸 거야)',
+    '- 다 끝나면 [토론 결론]을 정리해. 형식은 아래 [결론 형식]을 따라.',
     '',
-    '[토론 결론]',
-    '이야기의 핵심: …',
-    '톤앤무드: …',
-    '색감·조명: …',
-    '카메라 언어: …',
-    '인물: 이름 - 생김새·체격·옷차림, 성격이 드러나는 자세·몸짓·손버릇·시선, 감정이 얼굴에 드러나는 방식, 말할 때의 모습 (한 사람씩 한 줄)',
-    '공간: 장소 이름 - 구조, 물건, 질감, 빛과 색 (장소마다 한 줄)',
-    '씬별 화면: S#번호 - 핵심 순간의 표정·행동·위치와 보여 줄 방법 (중요한 씬마다 한 줄)',
-    '[작품 설정]',
-    '인물별 나이·직업·관계·생김새·소지품, 주요 장소, 차량·소품, 시대·계절 (한 줄씩, 뒤 씬에서 드러나는 것까지)',
+    ...DEBATE_FORMAT,
     '',
     '지금은 1부부터 시작해 줘.',
   ].join('\n');
 }
-export const DEBATE_NEXT = '다음. 앞과 같은 깊이로 이어서 토론해 줘. 시나리오를 고치거나 보완하는 이야기는 하지 말고, 이 시나리오를 어떻게 이해하고 인물의 표정·행동과 화면을 어떻게 구체적으로 그려 낼지만. 마지막 부까지 끝났으면 [토론 결론]과 [작품 설정]을 정리해 줘.';
-/** 토론 답 → 결론 */
+const DEBATE_FORMAT = [
+  '[결론 형식]',
+  '- 결론은 요약이 아니라 장면 묘사 담당자가 이것만 보고 화면을 정확히 그릴 수 있는 "연출 노트"야. 토론에서 나온 구체적인 내용(표정, 몸짓, 위치, 물건, 빛)을 줄이지 말고 빠짐없이 옮겨. 길어도 돼.',
+  '- 한 번에 다 못 쓰면 끊긴 곳에서 멈추고, 내가 "다음"이라고 하면 [토론 결론 계속]으로 이어서 써.',
+  '- 대괄호 머리표를 아래 그대로 써 (앱이 이 표로 씬마다 필요한 부분을 골라 써).',
+  '[토론 결론]',
+  '[전체]',
+  '이야기의 핵심: (3~5문장)',
+  '톤앤무드: (3~5문장)',
+  '색감·조명: (장소·시간대별로)',
+  '카메라 언어: (인물별·상황별 원칙)',
+  '[인물 이름]  ← 인물마다 하나씩, 이름을 대괄호 안에',
+  '생김새·체격·옷차림: (씬에 따라 바뀌면 씬 번호와 함께)',
+  '자세·걸음·손버릇·시선:',
+  '감정별 표정과 몸짓: (예: 화를 참을 때 …, 거짓말할 때 …, 무너질 때 …)',
+  '말할 때의 모습:',
+  '씬별 감정과 행동의 변화: S#번호 - … (나오는 씬마다)',
+  '[공간 장소 이름]  ← 장소마다 하나씩',
+  '구조와 크기, 물건 배치, 질감과 낡음, 빛·색·소리, 인물이 서는 곳과 동선',
+  '[씬 번호]  ← 모든 씬마다 하나씩, 빠짐없이 (예: [씬 1], [씬 2] …)',
+  '핵심 순간:',
+  '인물별 위치·동작·표정 (일어나는 순서대로, 대사 없는 반응까지):',
+  '꼭 보여 줄 것과 보여 주는 방법 (거리, 앵글, 인서트, 리액션):',
+  '[작품 설정]',
+  '인물별 나이·직업·관계·생김새·소지품, 주요 장소, 차량·소품, 시대·계절 (한 줄씩, 뒤 씬에서 드러나는 것까지)',
+];
+export const DEBATE_NEXT = '다음. 앞과 같은 깊이로 이어서 토론해 줘. 시나리오를 고치거나 보완하는 이야기는 하지 말고, 이 시나리오를 어떻게 이해하고 인물의 표정·행동과 화면을 어떻게 구체적으로 그려 낼지만. 마지막 부까지 끝났으면 [결론 형식]대로 [토론 결론]을 자세히 정리해 줘. 결론을 쓰는 중이었다면 [토론 결론 계속]으로 이어서.';
+/** 토론을 이미 끝낸 뒤, 결론만 자세히 다시 받기 */
+export function buildDebateSummaryRequest(): string {
+  return ['지금까지 세 사람이 나눈 토론 전체를 바탕으로 [토론 결론]을 처음부터 다시, 아주 자세히 정리해 줘. 앞에 쓴 결론은 너무 짧았어.', '', ...DEBATE_FORMAT].join('\n');
+}
+/** 토론 답(여러 번 붙여 넣은 기록 전체) → 결론. [토론 결론]이 다시 나오면 새로 시작, [토론 결론 계속]은 이어 붙임 */
 export function parseDebate(text: string): string | undefined {
-  const t = unescapeMd(text.replace(/\r/g, ''));
-  const i = t.search(/\[\s*토론\s*결론\s*\]/);
-  if (i < 0) return undefined;
-  const body = t.slice(i).replace(/^\[\s*토론\s*결론\s*\][^\n]*\n?/, '');
-  const end = body.search(/^\s*\**\[\s*작품\s*설정\s*\]/m);
-  const r = (end >= 0 ? body.slice(0, end) : body).replace(/\*\*/g, '').trim();
+  const t = unescapeMd(text.replace(/\r/g, '')).replace(/\*\*/g, '');
+  const re = /^\s*#*\s*\[\s*토론\s*결론(\s*계속)?[^\]\n]*\]\s*$/gm;
+  const marks: { at: number; end: number; cont: boolean }[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(t))) marks.push({ at: m.index, end: m.index + m[0].length, cont: !!m[1] });
+  if (!marks.length) return undefined;
+  let out: string[] = [];
+  marks.forEach((mk, i) => {
+    let body = t.slice(mk.end, marks[i + 1]?.at ?? t.length);
+    const stop = body.search(/^\s*#*\s*\[\s*작품\s*설정\s*\]/m);
+    if (stop >= 0) body = body.slice(0, stop);
+    body = body.replace(/\n━━━━━━━━\n[\s\S]*$/, '').trim();   // 다음 붙여넣기의 토론 대화는 빼기
+    if (!mk.cont) out = [];
+    if (body) out.push(body);
+  });
+  const r = out.join('\n').trim();
   return r || undefined;
+}
+/** 결론을 [머리표] 덩어리로 */
+function debateBlocks(d: string): { head: string; body: string }[] {
+  const out: { head: string; body: string }[] = []; let cur: { head: string; body: string } | null = { head: '', body: '' };
+  for (const line of d.split('\n')) {
+    const h = line.trim().match(/^#*\s*\[\s*([^\]]+?)\s*\]\s*(.*)$/);
+    if (h && !/^\d+\s*-\s*\d+$/.test(h[1])) { if (cur && cur.body.trim()) out.push(cur); cur = { head: h[1].trim(), body: h[2] ? h[2] + '\n' : '' }; continue; }
+    cur!.body += line + '\n';
+  }
+  if (cur && cur.body.trim()) out.push(cur);
+  return out;
+}
+/** 이 씬에 필요한 결론만: [전체] + 나오는 인물 + 이 씬 장소 + [씬 n] (머리표가 없으면 전체) */
+export function debateFor(p: Project, scene?: Scene): string {
+  const d = p.debate?.trim(); if (!d) return '';
+  if (!scene) return d;
+  const blocks = debateBlocks(d);
+  if (blocks.filter(b => b.head).length < 2) return d;
+  const text = scene.lines.map(l => l.text).join(' ') + ' ' + scene.heading;
+  const keep = blocks.filter(b => {
+    const h = b.head.replace(/^(인물|공간|장소)\s*/, '');
+    if (!b.head || /^전체/.test(b.head)) return true;
+    const sn = b.head.match(/^(씬|S#?)\s*#?\s*(\d+)/i); if (sn) return Number(sn[2]) === scene.num;
+    if (/^(공간|장소)/.test(b.head)) return h.split(/[\s/·,()]+/).filter(w => w.length >= 2).some(w => scene.heading.includes(w));
+    return h.split(/[\s/·,()]+/).filter(w => w.length >= 2).some(w => text.includes(w));
+  });
+  return keep.map(b => (b.head ? `[${b.head}]\n` : '') + b.body.trim()).join('\n\n');
 }
 /** 다른 씬들의 흐름: 씬 제목과 첫 지문 */
 export function sceneOutline(p: Project, current?: number): string[] {
@@ -258,7 +318,8 @@ export function buildCutSplitRequest(p: Project, scene: Scene): string {
   const parts = [...DIRECTOR_RULES.filter(r => !/한 번에 씬 3개씩|"계속"이라고/.test(r)),
     `- 이번에는 S#${scene.num} 한 씬만 나눠. 시나리오 파일을 첨부했으면 전체를 읽고, 없으면 아래 [작품 설정]과 [전체 씬 흐름]으로 앞뒤 이야기를 이해한 다음 작업해.`];
   if (!p.bible?.trim()) parts.push('- 시나리오 파일을 첨부했으면 답 맨 앞에 [작품 설정]을 써: 인물별(나이, 직업, 관계, 생김새, 늘 입는 옷, 소지품), 주요 장소, 차량·소품, 시대·계절을 뒤 씬에서 드러나는 것까지 한 줄씩.');
-  parts.push(...bibleBlock(p));
+  if (p.debate?.trim()) parts.push('- [3인 토론 결론]의 인물 몸짓·표정·위치, 공간, [씬] 항목의 순간들을 컷 나누기와 "화면" 묘사에 빠짐없이 살려. "화면"은 이때 3~5문장으로, 눈·입·손·어깨까지 구체적으로. 토론 기록 파일을 첨부했으면 그 대화의 세부도 참고해.');
+  parts.push(...bibleBlock(p, scene));
   if (looks.length) parts.push('', '[등장인물]', ...looks);
   parts.push('', '[전체 씬 흐름]', ...sceneOutline(p, scene.num));
   parts.push('', `[씬] S#${scene.num}. ${scene.heading}`, '', '[대본]', numberedScene(scene), '', ...ANSWER_FORMAT(scene.num));
@@ -285,6 +346,7 @@ export function buildFullCutSplitRequest(p: Project, scenes: Scene[], per = 3, r
     `- 시나리오 전체는 첨부한 파일 "${scriptFileName(p)}"에 있어. 파일을 끝까지 읽고 이야기 전체를 이해한 다음 작업해 줘. (씬 ${scenes.length}개)`];
   if (partial) parts.push(`- 이번에 나눌 씬은 S#${from}부터 S#${to}까지(${inRange.length}개)야. 앞뒤 씬은 흐름 이해에만 쓰고 답하지 마. S#${to}까지 끝나면 "끝"이라고 써.`);
   if (!p.bible?.trim()) parts.push('- 첫 답의 맨 앞에 [작품 설정]을 써: 시나리오 전체를 읽고 인물별(나이, 직업, 관계, 생김새, 늘 입는 옷, 소지품, 버릇), 주요 장소별(구조, 위치, 분위기), 차량·소품, 시대·계절을 한 줄씩. 뒤 씬에서 드러나는 것까지 모두. 그다음 [설정표]와 컷을 써.');
+  if (p.debate?.trim()) parts.push('- [3인 토론 결론]의 인물 몸짓·표정·위치, 공간, [씬] 항목의 순간들을 컷 나누기와 "화면" 묘사에 빠짐없이 살려. "화면"은 이때 3~5문장으로, 눈·입·손·어깨까지 구체적으로. 토론 기록 파일을 첨부했으면 그 대화의 세부도 참고해.');
   parts.push(...bibleBlock(p));
   if (looks.length) parts.push('', '[등장인물]', ...looks);
   parts.push('', ...ANSWER_FORMAT(first), '', `지금은 S#${first}부터 씬 ${Math.min(per, inRange.length || per)}개(S#${first}~S#${last})만 답해 줘.`);

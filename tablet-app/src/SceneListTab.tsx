@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 import type { WsProps } from './Workspace';
 import type { Project } from './types';
 import { applyAiCuts, autoSummary, cutValues, estimatePages, getCuts, getScenes, isAiScene, knownNames, mergeCuts, resetBreaks, sceneStats, splitAt, type Cut, type Scene } from './script';
-import { buildDebateRequest, DEBATE_NEXT, parseDebate, buildCutSplitRequest, buildFullCutSplitRequest, fullScriptText, buildNextRequest, parseBible, parseCutSplitAnswer, parseSetTables, resolveNumbers, scriptFileName } from './prompts';
+import { buildDebateRequest, buildDebateSummaryRequest, DEBATE_NEXT, parseDebate, buildCutSplitRequest, buildFullCutSplitRequest, fullScriptText, buildNextRequest, parseBible, parseCutSplitAnswer, parseSetTables, resolveNumbers, scriptFileName } from './prompts';
 import { copyText } from './util';
 import type { AICut } from './types';
 import { ANGLES, MOVES, SHOT_SIZES, termLabel } from './shots';
@@ -186,7 +186,7 @@ function DebateModal({ p, update, onClose, onNext }: { p: Project; update: WsPro
   const add = () => {
     const t = text.trim(); if (!t) return;
     const log = [p.debateLog, t].filter(Boolean).join('\n\n━━━━━━━━\n\n');
-    const concl = parseDebate(t); const bible = parseBible(t);
+    const concl = parseDebate(log); const bible = parseBible(t);
     update(x => ({ ...x, debateLog: log, ...(concl ? { debate: concl } : {}), ...(bible ? { bible } : {}) }));
     setText('');
     toast(concl ? '토론 결론을 저장했어요. 이제 컷 나누기와 장면 묘사에 이 결론이 같이 가요.' : `토론 ${rounds + 1}번째 답을 모았어요. "다음" 요청을 복사해 이어 받으세요.`);
@@ -202,6 +202,7 @@ function DebateModal({ p, update, onClose, onNext }: { p: Project; update: WsPro
       <div className="row">
         <b>2.</b> <button className="primary" onClick={() => copy(buildDebateRequest(p))}>토론 요청 복사</button>
         <button onClick={() => copy(DEBATE_NEXT)}>"다음" 요청 복사</button>
+        {rounds > 0 && <button onClick={() => copy(buildDebateSummaryRequest())} title="토론은 끝났는데 결론이 짧을 때, 같은 대화창에 붙여 넣어요">결론 자세히 다시 받기</button>}
         <button onClick={() => openAiSide()}>AI 옆 화면에 열기 ◫</button>
         <span className="muted small-t">→ 한 번에 1~2부씩 답해요. 끝까지 "다음"으로 이어 받아요</span>
       </div>
@@ -212,7 +213,8 @@ function DebateModal({ p, update, onClose, onNext }: { p: Project; update: WsPro
         {rounds > 0 && <button className="small danger" onClick={() => { if (confirm('토론 기록과 결론을 지울까요?')) update(x => ({ ...x, debateLog: undefined, debate: undefined })); }}>처음부터 다시</button>}
         <button className="primary" disabled={!text.trim()} onClick={add}>모으기</button>
       </div>
-      <div className="row small-t"><b>토론 결론</b><span className="muted">{p.debate ? '고칠 수 있어요. 모든 AI 요청에 같이 보내요.' : '아직 없어요. 마지막 답의 [토론 결론]이 여기 들어와요.'}</span></div>
+      <div className="row small-t"><b>토론 결론</b><span className="muted">{p.debate ? `${p.debate.length.toLocaleString()}자 · 고칠 수 있어요. 씬마다 그 씬의 인물·장소·[씬] 항목을 골라 같이 보내요.` : '아직 없어요. 마지막 답의 [토론 결론]이 여기 들어와요.'}</span>
+        {p.debate && p.debate.length < 1500 && <span style={{ color: 'var(--accent)' }}>결론이 짧아요. "결론 자세히 다시 받기"를 눌러 보세요.</span>}</div>
       <LazyText value={p.debate || ''} rows={10} placeholder={'이야기의 핵심: …\n톤앤무드: …\n색감·조명: …\n카메라 언어: …\n인물: 이름 - 생김새, 몸짓, 표정 …\n공간: …\n씬별 화면: S#1 - …'} onSave={v => update(x => ({ ...x, debate: v.trim() || undefined }))} />
       {p.debateLog && <details><summary className="small-t">토론 전체 기록 보기</summary><pre style={{ whiteSpace: 'pre-wrap', fontSize: 13, maxHeight: 400, overflow: 'auto', background: 'var(--soft)', padding: 10, borderRadius: 8 }}>{p.debateLog}</pre></details>}
       <div className="row" style={{ justifyContent: 'flex-end' }}>
@@ -294,6 +296,9 @@ function AiSplitModal({ p, scene, scenes, names, onClose, onApply, onBible }: { 
         <button className="small" onClick={() => setBibleOpen(!bibleOpen)}>{bibleOpen ? '닫기' : p.bible?.trim() ? '보기·고치기' : '직접 쓰기'}</button>
         {bibleIn && p.bible?.trim() && <button className="small" onClick={() => { onBible(bibleIn); toast('작품 설정을 새 답으로 바꿨어요.'); }}>답의 작품 설정으로 바꾸기</button>}
       </div>
+      {p.debateLog && <div className="row small-t"><span>3인 토론 기록이 있어요.</span>
+        <button className="small" onClick={async () => { try { await saveFile(new Blob([p.debateLog!], { type: 'text/plain' }), '토론기록.txt'); } catch (e: any) { toast('파일 저장 실패: ' + (e?.message || e)); } }}>토론 기록 파일 보내기</button>
+        <span className="muted">→ 시나리오 파일과 같이 첨부하면 토론의 세부까지 반영돼요</span></div>}
       {bibleOpen && <LazyText value={p.bible || ''} rows={8} placeholder={'인물: 지영 - 28세, 택시 회사 사장 딸, 갈색 웨이브 머리, 빨간 매니큐어\n장소: 망원역 앞 - 4차선 사거리, 언덕 위 주택가\n차량·소품: 지영의 진녹색 구형 재규어, 빨간 폴더폰\n시대·계절: 2000년대 초, 늦가을'} onSave={v => onBible(v)} />}
       {<div className="row">
         <b>1.</b> <button className={scene ? '' : 'primary'} onClick={async () => { try { await saveFile(new Blob([fullScriptText(p, allScenes)], { type: 'text/plain' }), scriptFileName(p)); } catch (e: any) { toast('파일 저장 실패: ' + (e?.message || e)); } }}>시나리오 파일 보내기</button>
