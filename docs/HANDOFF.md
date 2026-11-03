@@ -48,6 +48,16 @@ PC 원본 코드를 쓸 수 없어서 태블릿용으로 새로 만든 첫 버�
   - '그림으로 저장': 씬마다 JPG(html2canvas scale 1.5 → 너비 1080).
   - AI 컷 나누기 요청에 '효과음:', '화면효과:' 줄과 '말하는 인물의 화면 위치를 꼭 쓰기'를 추가. AICut.sfx/fx → Cut.auto.sfx/fx.
 
+## 인물 엔진 (2026-11-03, 브랜치 character-engine)
+사용자가 시나리오 작업실과 별도로 "인물이 사건을 겪을 때 그 사람이라면 정말 그렇게 할 것 같은 반응"을 만드는 AI 도구를 만들기 시작함. 어느 정도 완성되면 작업실과 합칠 계획이라 같은 기술(React 18 + TS + Vite, IndexedDB)로 `character-engine/` 폴더에 따로 만듦. main 빌드(tablet-app)와는 상관없음.
+- 설계: 인물 엔진 설계서 https://claude.ai/artifact/StfQFv8HQumQWCfLdAy9EL (뿌리/현재 상태, 인지→감정→판단→행동, 작위성 점검, 성격 변화: 성장과 타락)
+- 엔진(`character-engine/src/engine/`)은 React 없이 순수 TS라 나중에 `tablet-app/src`로 옮길 수 있음. 자세한 구조는 `character-engine/README.md`.
+- AI: 기본은 작업실처럼 복사 → 외부 AI → 붙여넣기. 설정에서 Claude API(사용자 키, 기기에만 저장)를 고르면 반응 → 검수 → 걸리면 한 번 다시를 자동으로.
+- 성격 변화: 사건 하나가 뿌리 항목에 주는 압력은 최대 3. 문턱(기본 6)의 절반이면 균열, 문턱 + 결정적 사건(또는 문턱 1.5배)이면 전환점 제안 → 작가가 승인해야 뿌리가 바뀌고 아크에 기록.
+- 작업실 .sbk 에서 인물(name, memo, look) 가져오기.
+- 시험: `cd character-engine && npm test` (엔진 계산), 브라우저 시험은 붙여넣기 흐름, 되돌리기, 저장, 휴대폰 폭, API 흐름(가짜 응답)으로 확인함. 실제 Claude API 호출은 사용자 키로 아직 안 해 봄.
+- 다음: 사용자가 실제 인물로 써 보고 어색한 반응을 모아 점검 규칙 다듬기(3단계). 그 뒤 작업실과 통합(4단계).
+
 ## 윈도우용 (2026-11-02 추가)
 사용자가 안드로이드 탭용과 윈도우용을 함께 개발하자고 함. 화면 코드는 하나(`tablet-app/src`), 윈도우는 Electron 껍데기(`tablet-app/desktop`)로 같은 빌드(dist)를 띄운다.
 - 화면 주소는 `app://local/` (main.cjs 의 protocol.handle). 작품 저장(IndexedDB)이 이 주소에 묶이니 바꾸지 말 것.
