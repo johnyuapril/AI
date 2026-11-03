@@ -6,6 +6,7 @@ import CharactersTab from './CharactersTab';
 import EventsTab from './EventsTab';
 import { ConfirmButton, Field, download } from './ui';
 import { CHECK_RULES } from './engine/prompts';
+import { BUILD, VERSION, desktop, latestRelease, openExternal, RELEASES_PAGE, type Latest } from './update';
 
 type Tab = 'chars' | 'world' | 'events' | 'settings';
 const TABS: [Tab, string][] = [['chars', '인물'], ['world', '배경'], ['events', '사건'], ['settings', '설정']];
@@ -15,6 +16,7 @@ export default function App() {
   const [settings, setSettingsState] = useState<Settings>(DEFAULT_SETTINGS);
   const [tab, setTab] = useState<Tab>('chars');
   const timer = useRef<number>();
+  const upd = useUpdate();
 
   useEffect(() => { loadBook().then(setBookState); loadSettings().then(setSettingsState); }, []);
   const setBook = (f: (b: Book) => Book) => setBookState(b => {
@@ -33,6 +35,7 @@ export default function App() {
         <span className="brand">인물 엔진</span>
         <div className="tabs">{TABS.map(([k, l]) => <button key={k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{l}</button>)}</div>
         <span className="mode chip">{settings.mode === 'api' ? 'Claude API' : '복사 → 붙여넣기'}</span>
+        {upd.latest && upd.latest.code > BUILD && desktop && <button className="accent small" disabled={upd.busy} onClick={upd.install}>{upd.busy ? '받는 중…' : `업데이트 v${upd.latest.name}`}</button>}
       </div>
       <div className="page">
         {tab === 'chars' && <CharactersTab chars={book.chars} world={book.world} settings={settings} onChange={chars => setBook(b => ({ ...b, chars }))} />}
@@ -49,13 +52,13 @@ export default function App() {
           </div>
         )}
         {tab === 'events' && <EventsTab book={book} setBook={setBook} settings={settings} setSettings={setSettings} />}
-        {tab === 'settings' && <SettingsTab book={book} setBook={setBook} settings={settings} setSettings={setSettings} />}
+        {tab === 'settings' && <SettingsTab book={book} setBook={setBook} settings={settings} setSettings={setSettings} upd={upd} />}
       </div>
     </div>
   );
 }
 
-function SettingsTab({ book, setBook, settings, setSettings }: { book: Book; setBook: (f: (b: Book) => Book) => void; settings: Settings; setSettings: (s: Settings) => void }) {
+function SettingsTab({ book, setBook, settings, setSettings, upd }: { book: Book; setBook: (f: (b: Book) => Book) => void; settings: Settings; setSettings: (s: Settings) => void; upd: Upd }) {
   const [msg, setMsg] = useState('');
   const onFile = async (f: File | undefined) => {
     if (!f) return;
@@ -68,6 +71,20 @@ function SettingsTab({ book, setBook, settings, setSettings }: { book: Book; set
   };
   return (
     <div className="body" style={{ margin: '0 auto' }}>
+      <div className="panel">
+        <h3>버전 {VERSION}</h3>
+        <div className="row">
+          <button className="small" disabled={upd.checking} onClick={upd.check}>{upd.checking ? '확인 중…' : '업데이트 확인'}</button>
+          {upd.latest && upd.latest.code > BUILD
+            ? (desktop
+              ? <button className="accent small" disabled={upd.busy} onClick={upd.install}>{upd.busy ? '받는 중… 설치가 끝나면 다시 켜져요' : `v${upd.latest.name}로 업데이트`}</button>
+              : <button className="small" onClick={() => openExternal(upd.latest!.page)}>v{upd.latest.name} 설치 파일 받기</button>)
+            : upd.checked && <span className="small-t muted">{upd.latest ? '최신 버전이에요.' : '아직 올라온 설치 파일이 없어요.'}</span>}
+          <button className="small ghost" onClick={() => openExternal(RELEASES_PAGE)}>릴리스 페이지</button>
+        </div>
+        {upd.err && <div className="err">{upd.err}</div>}
+        <div className="muted small-t">업데이트해도 인물, 사건, 설정은 그대로 남아요.</div>
+      </div>
       <div className="panel">
         <h3>AI 쓰는 방식</h3>
         <label className="row"><input type="radio" checked={settings.mode === 'manual'} onChange={() => setSettings({ ...settings, mode: 'manual' })} /> 복사 → 외부 AI에 붙여넣기 → 답 붙여넣기 (시나리오 작업실과 같은 방식, 요금 없음)</label>
@@ -107,4 +124,25 @@ function SettingsTab({ book, setBook, settings, setSettings }: { book: Book; set
       </div>
     </div>
   );
+}
+
+interface Upd { latest: Latest | null; checked: boolean; checking: boolean; busy: boolean; err: string; check: () => void; install: () => void }
+/** 켤 때 한 번 새 버전을 확인하고, 설정 탭에서 다시 확인하거나 설치한다 */
+function useUpdate(): Upd {
+  const [latest, setLatest] = useState<Latest | null>(null);
+  const [checked, setChecked] = useState(false);
+  const [checking, setChecking] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const check = async () => {
+    setChecking(true); setErr('');
+    try { setLatest(await latestRelease()); setChecked(true); } catch { setErr('업데이트를 확인하지 못했어요. 인터넷 연결을 확인해 주세요.'); } finally { setChecking(false); }
+  };
+  const install = async () => {
+    if (!latest || !desktop) return;
+    setBusy(true); setErr('');
+    try { await desktop.installUpdate(latest.url); } catch (e: any) { setErr((e?.message ?? String(e)) + ' 릴리스 페이지에서 직접 받아 설치해 주세요.'); setBusy(false); }
+  };
+  useEffect(() => { if (desktop) check(); }, []);
+  return { latest, checked, checking, busy, err, check, install };
 }

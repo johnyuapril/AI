@@ -25,3 +25,9 @@ npm run build   # dist/ 에 웹앱
 - 복사 → 붙여넣기 (기본): 작업실처럼 요청을 복사해 외부 AI에 붙여넣고 답을 붙여넣는다. 요금 없음. 반응과 자체 점검을 한 번에 받는다.
 - Claude API: 설정에 넣은 사용자 자신의 API 키로 기기에서 바로 부른다(키는 기기에만 저장). 반응 → 별도 검수 → 고치기를 자동으로 한다.
   개인용이라 브라우저에서 키를 쓴다(`dangerouslyAllowBrowser`). 배포용으로 바꿀 때는 서버를 두고 키를 서버로 옮겨야 한다.
+
+## 윈도우 설치 파일 (.exe)
+- `desktop/` : Electron 껍데기. 웹앱(`dist`)을 `app://local/` 주소로 띄운다(저장 위치가 이 주소에 묶이니 바꾸지 말 것). 작업실 `tablet-app/desktop` 과 같은 방식.
+- `.github/workflows/character-engine.yml` 이 `character-engine/` 이 바뀐 push(main, character-engine 브랜치)마다 .exe 를 만들어 릴리스 `ce-v1.0.<번호>` 로 올린다. 작업실 업데이트가 latest 릴리스를 보므로 인물 엔진 릴리스는 latest 로 표시하지 않는다.
+- 업데이트: 앱을 켜면 `ce-v` 릴리스 중 가장 큰 번호를 확인해서 위쪽에 "업데이트 v…" 버튼을 띄운다. 누르면 설치 파일을 받아 실행하고 앱을 닫는다(한 번 클릭 설치, 끝나면 다시 켜짐). 설정 탭에서 다시 확인할 수 있다.
+- 리눅스에서 시험: `npm run build && cd desktop && npm ci && npm start`
