@@ -1,5 +1,5 @@
 import type { AICut, Project, Settings } from './types';
-import { type Cut, type Scene, type Unit, cutValues, isNightTime, sceneUnits } from './script';
+import { type Cut, type Scene, type Unit, cutValues, isNightTime, sceneUnits, splitSentences } from './script';
 import { SHOT_SIZES, ANGLES, MOVES, termLabel, parseShotLine } from './shots';
 import { cleanPasted, unescapeMd } from './util';
 
@@ -127,7 +127,7 @@ const DIRECTOR_RULES = [
   '너는 이 영화를 연출하는 영화감독이야. 촬영 전에 실제로 그릴 수 있는 정밀 콘티(스토리보드)를 만들 수 있게 시나리오를 컷으로 나누고 화면을 설계해 줘.',
   '- 기계적으로 문장마다 자르지 말고, 이야기 전체의 흐름과 인물의 감정을 생각해서 감독으로서 직접 판단해: 관객에게 정보를 공개하는 순서, 샷과 샷의 연결, 인물의 위치와 동작, 카메라의 움직임.',
   '- 한 컷 = 카메라가 끊기지 않고 보여 주는 한 화면. 한 문장 안에서도 보이는 대상, 크기, 장소가 바뀌면 컷을 나눠. (예: 항공 전경 → 도로 → 코너에서 나타나는 차)',
-  '- 대본의 문장마다 (1), (2) 처럼 번호가 붙어 있어. 대본 문장이나 대사는 다시 옮겨 쓰지 말고 번호로 가리키고, 번호 뒤 괄호 안에 그 문장의 첫 두세 단어만 적어 (번호 확인용). 번호는 대본에 적힌 번호 그대로 쓰고 새로 세지 마. 대사·소리는 그게 들리는 동안 화면에 보이는 컷에 번호로 넣어.',
+  '- 대본의 문장마다 (1), (2) 처럼 번호가 붙어 있어. 컷마다 그 컷이 보여 주는 대본 지문의 번호를 적고, "대본:" 줄에 그 번호의 원본 문장 전체를 한 글자도 바꾸지 말고 그대로 옮겨 적어 (어느 문장을 그렇게 묘사했는지 확인용. 이 시나리오는 내가 쓴 작품이야). 번호는 대본에 적힌 번호 그대로 쓰고 새로 세지 마. 대사·소리는 그게 들리는 동안 화면에 보이는 컷에 번호로 넣어.',
   '- 샷 크기는 EWS, WS, FS, MS, MCU, CU, ECU, OTS, 2S 중에서, 앵글과 카메라 움직임은 한국어로 써.',
   '- 컷 번호는 [씬번호-컷번호] 로. (예: [12-3] 은 12번 씬의 세 번째 컷)',
   '- 씬마다 첫 컷 앞에 [설정표 씬번호]로 씬 내내 변하지 않는 장소 모습, 시간·날씨·조명, 인물별 생김새·옷차림·소지품을 정리해.',
@@ -144,7 +144,8 @@ const ANSWER_FORMAT = (n: number) => [
   '인물: 이름 - 생김새, 옷차림, 소지품 (한 사람씩 한 줄)',
   '',
   `[${n}-1] 샷 크기 / 앵글 / 카메라 움직임`,
-  '대본 번호: 이 컷에 해당하는 지문 번호와 첫 두세 단어 (예: 2 (차량들 틈의) 또는 3-4 (차 안을 보면))',
+  '대본 번호: 이 컷에 해당하는 지문 번호 (예: 2 또는 3-4)',
+  '대본: 그 번호의 원본 문장 전체 그대로 (여러 문장이면 모두)',
   '화면: 이 컷 한 순간에 보이는 것 (2~4문장, 위치·자세·시선·손동작·접촉)',
   '연출: 왜 이렇게 찍는지 한 줄',
   '인물: 화면에 나오는 인물 이름 (없으면 없음)',
@@ -319,7 +320,10 @@ export function resolveNumbers(c: ParsedCut, scene: Scene): AICut {
   const pick = (ns?: number[]) => (ns || []).map(n => units[n - 1]).filter(Boolean);
   const { scene: _s, idx: _i, srcNums, dlgNums, srcHints, dlgHints, ...rest } = c;
   const out: AICut = { ...rest };
-  const su = pick(fixNums(units, srcNums, srcHints));
+  // AI가 옮겨 적은 원본 문장("대본:")이 있으면 그 문장으로 번호를 확인·바로잡음
+  const srcText = (c.src || '').trim();
+  const fromText = srcText ? splitSentences(srcText).filter(x => norm(x).length >= 2) : [];
+  const su = pick(fixNums(units, srcNums, fromText.length ? fromText : srcHints));
   const du = pick(fixNums(units, dlgNums, dlgHints));
   const all = [...su, ...du];
   if (su.length) out.src = su.filter(u => u.kind !== 'dlg').map(u => u.text).join(' ') || out.src;
