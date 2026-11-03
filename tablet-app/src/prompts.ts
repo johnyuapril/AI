@@ -127,7 +127,7 @@ const DIRECTOR_RULES = [
   '너는 이 영화를 연출하는 영화감독이야. 촬영 전에 실제로 그릴 수 있는 정밀 콘티(스토리보드)를 만들 수 있게 시나리오를 컷으로 나누고 화면을 설계해 줘.',
   '- 기계적으로 문장마다 자르지 말고, 이야기 전체의 흐름과 인물의 감정을 생각해서 감독으로서 직접 판단해: 관객에게 정보를 공개하는 순서, 샷과 샷의 연결, 인물의 위치와 동작, 카메라의 움직임.',
   '- 한 컷 = 카메라가 끊기지 않고 보여 주는 한 화면. 한 문장 안에서도 보이는 대상, 크기, 장소가 바뀌면 컷을 나눠. (예: 항공 전경 → 도로 → 코너에서 나타나는 차)',
-  '- 대본의 문장마다 (1), (2) 처럼 번호가 붙어 있어. 대본 문장이나 대사는 다시 옮겨 쓰지 말고 번호로만 가리켜. 대사·소리는 그게 들리는 동안 화면에 보이는 컷에 번호로 넣어.',
+  '- 대본의 문장마다 (1), (2) 처럼 번호가 붙어 있어. 대본 문장이나 대사는 다시 옮겨 쓰지 말고 번호로 가리키고, 번호 뒤 괄호 안에 그 문장의 첫 두세 단어만 적어 (번호 확인용). 번호는 대본에 적힌 번호 그대로 쓰고 새로 세지 마. 대사·소리는 그게 들리는 동안 화면에 보이는 컷에 번호로 넣어.',
   '- 샷 크기는 EWS, WS, FS, MS, MCU, CU, ECU, OTS, 2S 중에서, 앵글과 카메라 움직임은 한국어로 써.',
   '- 컷 번호는 [씬번호-컷번호] 로. (예: [12-3] 은 12번 씬의 세 번째 컷)',
   '- 씬마다 첫 컷 앞에 [설정표 씬번호]로 씬 내내 변하지 않는 장소 모습, 시간·날씨·조명, 인물별 생김새·옷차림·소지품을 정리해.',
@@ -144,11 +144,11 @@ const ANSWER_FORMAT = (n: number) => [
   '인물: 이름 - 생김새, 옷차림, 소지품 (한 사람씩 한 줄)',
   '',
   `[${n}-1] 샷 크기 / 앵글 / 카메라 움직임`,
-  '대본 번호: 이 컷에 해당하는 지문 번호 (예: 1 또는 2-3)',
+  '대본 번호: 이 컷에 해당하는 지문 번호와 첫 두세 단어 (예: 2 (차량들 틈의) 또는 3-4 (차 안을 보면))',
   '화면: 이 컷 한 순간에 보이는 것 (2~4문장, 위치·자세·시선·손동작·접촉)',
   '연출: 왜 이렇게 찍는지 한 줄',
   '인물: 화면에 나오는 인물 이름 (없으면 없음)',
-  '대사 번호: 이 컷에 들리는 대사 번호 (없으면 없음)',
+  '대사 번호: 이 컷에 들리는 대사 번호와 첫 두세 단어 (예: 7 (어디야 지금)) (없으면 없음)',
   '',
   `[${n}-2] …`,
 ];
@@ -205,7 +205,7 @@ export function buildNextRequest(scene: number, cut: number, per: number): strin
 const stripMd = (s: string) => s.replace(/\*\*|__|`/g, '').replace(/^\s*[-*•]\s+/, '').trim();
 
 /** AI 답 → 컷 목록. "[1-1] …" 형식과 표(| 컷 | 카메라 | 화면 |) 형식 둘 다 */
-export type ParsedCut = AICut & { scene: number; idx?: number; srcNums?: number[]; dlgNums?: number[] };
+export type ParsedCut = AICut & { scene: number; idx?: number; srcNums?: number[]; dlgNums?: number[]; srcHints?: string[]; dlgHints?: string[] };
 export function parseCutSplitAnswer(text: string, names: string[]): ParsedCut[] {
   const lines = unescapeMd(text.replace(/\r/g, '')).split('\n');
   const out: ParsedCut[] = [];
@@ -247,8 +247,8 @@ export function parseCutSplitAnswer(text: string, names: string[]): ParsedCut[] 
     const f = l.match(/^(대본\s*번호|대사\s*번호|대본|화면|연출|인물|대사|소리|카메라)\s*[:：]\s*(.*)$/);
     if (f) {
       field = f[1].replace(/\s/g, ''); const v = f[2].trim();
-      if (field === '대본번호') { cur.srcNums = nums(v); field = ''; }
-      else if (field === '대사번호') { cur.dlgNums = nums(v); field = ''; }
+      if (field === '대본번호') { cur.srcNums = nums(v); cur.srcHints = hints(v); field = ''; }
+      else if (field === '대사번호') { cur.dlgNums = nums(v); cur.dlgHints = hints(v); field = ''; }
       else if (field === '대본') cur.src = v;
       else if (field === '화면') cur.see = v;
       else if (field === '연출') cur.intent = v;
@@ -280,7 +280,32 @@ export function parseSetTables(text: string): Record<number, string> {
   flush();
   return out;
 }
+/** "2 (차량들 틈의)" → 괄호 안 첫머리 글 */
+function hints(v: string): string[] {
+  return [...v.matchAll(/[(（]([^)）]+)[)）]/g)].map(m => m[1].replace(/^["“'‘]|["”'’]$/g, '').replace(/^[^:：]{1,10}[:：]\s*/, '').trim()).filter(h => h.length >= 2 && !/^(없음|예)$/.test(h));
+}
+const norm = (t: string) => t.replace(/[\s.,!?…·'"“”‘’()（）\[\]-]/g, '');
+/** 첫머리 글로 대본 번호 찾기 (AI가 번호를 잘못 세도 맞는 문장을 찾음) */
+function findByHint(units: Unit[], h: string, near: number): number {
+  const k = norm(h).slice(0, 8); if (k.length < 2) return 0;
+  const hits: number[] = [];
+  units.forEach((u, i) => { const t = norm(u.text); if (t.startsWith(k) || (k.length >= 4 && t.includes(k))) hits.push(i + 1); });
+  if (!hits.length) return 0;
+  return hits.reduce((a, b) => Math.abs(b - near) < Math.abs(a - near) ? b : a);
+}
+/** 번호와 첫머리 글이 다르면 글을 믿고 번호를 고침 */
+function fixNums(units: Unit[], ns: number[] | undefined, hs: string[] | undefined): number[] | undefined {
+  if (!hs?.length) return ns;
+  const found = hs.map((h, i) => findByHint(units, h, ns?.[i] ?? ns?.[0] ?? 0)).filter(Boolean);
+  if (!found.length) return ns;
+  if (ns?.length && found.every(f => ns.includes(f))) return ns;   // 번호가 맞음
+  const lo = Math.min(...found), hi = Math.max(...found);
+  // "3-4 (차 안을 보면)" 처럼 범위에 첫머리 하나면, 범위 길이만큼 옮김
+  const span = ns?.length && found.length === 1 ? ns.length : hi - lo + 1;
+  return Array.from({ length: span }, (_, i) => lo + i).filter(n => n <= units.length);
+}
 function nums(v: string): number[] {
+  v = v.replace(/[(（][^)）]*[)）]/g, ' ');
   const out: number[] = [];
   for (const m of v.matchAll(/(\d+)\s*(?:[-~–]\s*(\d+))?/g)) {
     const a = +m[1], b = m[2] ? +m[2] : a;
@@ -292,10 +317,10 @@ function nums(v: string): number[] {
 export function resolveNumbers(c: ParsedCut, scene: Scene): AICut {
   const units = sceneUnits(scene);
   const pick = (ns?: number[]) => (ns || []).map(n => units[n - 1]).filter(Boolean);
-  const { scene: _s, idx: _i, srcNums, dlgNums, ...rest } = c;
+  const { scene: _s, idx: _i, srcNums, dlgNums, srcHints, dlgHints, ...rest } = c;
   const out: AICut = { ...rest };
-  const su = pick(srcNums);
-  const du = pick(dlgNums);
+  const su = pick(fixNums(units, srcNums, srcHints));
+  const du = pick(fixNums(units, dlgNums, dlgHints));
   const all = [...su, ...du];
   if (su.length) out.src = su.filter(u => u.kind !== 'dlg').map(u => u.text).join(' ') || out.src;
   const dl = all.filter(u => u.kind === 'dlg');
