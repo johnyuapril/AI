@@ -7,6 +7,7 @@ import { DEFAULT_THRESHOLD } from './engine/change';
 export interface Book {
   chars: Character[]; world: World; events: StoryEvent[]; reactions: Reaction[];
   undo?: { eventId: string; chars: Character[]; reactionIds: string[] }; // 마지막으로 돌린 사건 되돌리기 (한 단계)
+  script?: string; // 시나리오 탭에서 쓴 글
 }
 export const EMPTY_WORLD: World = { era: '', rules: '', limits: '', groups: '' };
 export const DEFAULT_SETTINGS: Settings = { mode: 'manual', apiKey: '', model: DEFAULT_MODEL, threshold: DEFAULT_THRESHOLD, extraRules: [] };

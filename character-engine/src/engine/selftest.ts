@@ -62,3 +62,43 @@ assert.ok(!p.includes('암 진단'));
 assert.ok(p.includes('병원에 다녀왔다'));
 
 console.log('엔진 시험 통과');
+
+// ---- 붙여넣은 글 정리 결과 합치기 ----
+import { mergeChars, mergeEvents, mergeWorld, organizeManualPrompt } from './organize';
+{
+  let n = 0;
+  const make = (name: string): Character => ({ ...base, id: 'n' + ++n, name, root: { ...base.root, values: '', basics: '' }, relations: [], state: { mood: '', knows: [], memories: [] } });
+  const existing = [{ ...base, root: { ...base.root, values: '이미 적은 가치관' } }];
+  const raw = { characters: [
+    { name: '정훈', values: 'AI 가치관', wounds: '', basics: '', personality: '', desires: '', coping: '', speech: '', mood: '피곤', knows: ['명단 소문'], arcGoal: '', relations: [{ other: '미선', label: '아내', feeling: '미안함' }] },
+    { name: '미선', values: '가족이 먼저', wounds: '', basics: '40세', personality: '', desires: '', coping: '', speech: '', mood: '', knows: [], arcGoal: '', relations: [] },
+  ] };
+  const keep = mergeChars(existing, raw, true, make);
+  assert.equal(keep.added, 1); assert.equal(keep.updated, 1);
+  assert.equal(keep.value[0].root.values, '이미 적은 가치관');   // 빈 칸만 채우기
+  assert.equal(keep.value[0].root.wounds, '아버지의 사업 실패'); // AI가 빈 값이면 그대로
+  assert.equal(keep.value[0].relations[0].otherId, keep.value[1].id);
+  const over = mergeChars(existing, raw, false, make);
+  assert.equal(over.value[0].root.values, 'AI 가치관');        // 덮어쓰기
+  const w = mergeWorld({ era: '1997년', rules: '', limits: '', groups: '' }, { era: '현대', rules: '체면', limits: '', groups: '' }, true);
+  assert.equal(w.value.era, '1997년'); assert.equal(w.value.rules, '체면');
+  const ev = mergeEvents([], keep.value, { events: [{ title: '구조조정', what: '명단', whenWhere: '', participants: ['정훈', '처남'], knowledge: [{ name: '정훈', knows: '소문만' }], span: 'days', decisive: true }] }, true, make, () => 'e1');
+  assert.equal(ev.added, 1); assert.deepEqual(ev.newChars, ['처남']);
+  assert.equal(ev.value[0].participants.length, 2); assert.equal(ev.value[0].knowledge[keep.value[0].id], '소문만');
+  assert.ok(organizeManualPrompt('chars', '메모', false, ['정훈']).includes('지어내지 말고'));
+  console.log('정리 합치기 시험 통과');
+}
+
+// ---- 시나리오 쓰기 ----
+import { cleanScript, screenplayManualPrompt } from './screenplay';
+{
+  const e1: StoryEvent = { id: 'e1', title: '구조조정', what: '명단에 올랐다', whenWhere: '금요일, 사무실', participants: ['a'], knowledge: {}, span: 'now', decisive: false, createdAt: 0 };
+  const e2: StoryEvent = { ...e1, id: 'e2', title: '통장', what: '아내가 잔고를 본다' };
+  const r1 = { ...toReaction({ action: '주차장에 앉아 있다', dialogue: '늦었지?', inner: '어떡하지' }, e1, 'a', 1) };
+  const p = screenplayManualPrompt({ world: { era: '', rules: '', limits: '', groups: '' }, chars: [base], events: [e1, e2], reactions: [r1], threshold: 6, extraRules: ['쉽게 사과하지 않는다'], direction: '건조하게', startScene: 3 });
+  assert.ok(p.includes('주차장에 앉아 있다') && p.includes('바꾸지 마라'));
+  assert.ok(p.includes('아직 반응을 정하지 않은 사건'));
+  assert.ok(p.includes('S#3') && p.includes('건조하게') && p.includes('쉽게 사과하지'));
+  assert.equal(cleanScript('여기요\n```text\nS#1. 사무실 - 낮\n\\*\\*정훈\\*\\* : 응\n```'), 'S#1. 사무실 - 낮\n정훈 : 응');
+  console.log('시나리오 쓰기 시험 통과');
+}

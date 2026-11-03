@@ -7,17 +7,27 @@ export const DEFAULT_MODEL = 'claude-opus-5-5';
 export class AiError extends Error {}
 
 export async function askJson<T>(apiKey: string, model: string, system: string, user: string, schema: Record<string, unknown>): Promise<T> {
+  const text = await ask(apiKey, model, system, user, schema, 16000);
+  try { return JSON.parse(text) as T; } catch { throw new AiError('AI 답을 읽지 못했어요. 다시 해 보세요.'); }
+}
+
+/** 긴 글(시나리오) 받기 */
+export function askText(apiKey: string, model: string, system: string, user: string): Promise<string> {
+  return ask(apiKey, model, system, user, null, 64000);
+}
+
+async function ask(apiKey: string, model: string, system: string, user: string, schema: Record<string, unknown> | null, maxTokens: number): Promise<string> {
   if (!apiKey.trim()) throw new AiError('설정에서 Claude API 키를 먼저 넣어 주세요.');
   const client = new Anthropic({ apiKey: apiKey.trim(), dangerouslyAllowBrowser: true });
   let msg;
   try {
     msg = await client.beta.messages.stream({
       model,
-      max_tokens: 16000,
+      max_tokens: maxTokens,
       betas: ['server-side-fallback-2026-07-01'],
       fallbacks: 'default', // 안전 분류기가 거절하면 서버가 다른 모델로 다시 시도
       thinking: { type: 'adaptive' },
-      output_config: { effort: 'high', format: { type: 'json_schema', schema } },
+      output_config: schema ? { effort: 'high', format: { type: 'json_schema', schema } } : { effort: 'high' },
       system,
       messages: [{ role: 'user', content: user }],
     }).finalMessage();
@@ -31,8 +41,7 @@ export async function askJson<T>(apiKey: string, model: string, system: string, 
   }
   if (msg.stop_reason === 'refusal') throw new AiError('AI가 이 요청에 답하지 않았어요. 사건 내용을 조금 바꿔 다시 해 보세요.');
   if (msg.stop_reason === 'max_tokens') throw new AiError('답이 너무 길어서 끊겼어요. 다시 해 보세요.');
-  const text = msg.content.map(b => (b.type === 'text' ? b.text : '')).join('');
-  try { return JSON.parse(text) as T; } catch { throw new AiError('AI 답을 읽지 못했어요. 다시 해 보세요.'); }
+  return msg.content.map(b => (b.type === 'text' ? b.text : '')).join('');
 }
 
 /** 외부 AI 답(붙여넣은 글)에서 JSON 꺼내기: ```json 블록 → 첫 { 부터 마지막 } 까지 */

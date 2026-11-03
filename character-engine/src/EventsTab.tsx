@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import type { Character, Reaction, Settings, StoryEvent } from './engine/types';
 import type { Book } from './store';
-import { uid } from './store';
+import { newCharacter, uid } from './store';
+import OrganizePanel from './OrganizePanel';
+import { mergeEvents } from './engine/organize';
 import { acceptProposal } from './engine/change';
 import { commit, runEvent, seenOf, toReaction } from './engine/pipeline';
 import { manualPrompt } from './engine/prompts';
@@ -18,6 +20,14 @@ export default function EventsTab({ book, setBook, settings, setSettings }: { bo
   const add = () => { const e = newEvent(book.events.length + 1); setBook(b => ({ ...b, events: [...b.events, e] })); setSel(e.id); };
 
   return (
+    <>
+    <OrganizePanel kind="events" settings={settings} known={book.chars.map(c => c.name)} onApply={(raw, keep) => {
+      const r = mergeEvents(book.events, book.chars, raw, keep, newCharacter, uid);
+      if (!r.added && !r.updated) return 'AI 답에서 사건을 찾지 못했어요.';
+      setBook(b => ({ ...b, events: r.value, chars: r.chars }));
+      if (!sel && r.value[0] && window.innerWidth > 760) setSel(r.value[0].id);
+      return `새 사건 ${r.added}개, 채운 사건 ${r.updated}개.` + (r.newChars.length ? ` 없던 인물 ${r.newChars.join(', ')}은(는) 인물 탭에 새로 만들었어요.` : '');
+    }} />
     <div className={'split' + (ev ? ' has-sel' : '')}>
       <div className="list">
         <button className="primary" onClick={add}>+ 사건 추가</button>
@@ -37,6 +47,7 @@ export default function EventsTab({ book, setBook, settings, setSettings }: { bo
           : <div className="empty">왼쪽에서 사건을 고르세요.</div>}
       </div>
     </div>
+    </>
   );
 }
 

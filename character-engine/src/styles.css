@@ -92,3 +92,7 @@ details summary { cursor: pointer; color: var(--muted); font-size: 14px; }
   .tabs { margin-left: 0; width: 100%; order: 3; }
 }
 .panel > button, .panel > .row > button { align-self: flex-start; }
+.org { padding: 10px 16px 0; max-width: 1180px; }
+.org > button { align-self: flex-start; }
+@media (max-width: 760px) { .org { padding: 8px 12px 0; } }
+.script { font-family: "Noto Sans KR", monospace; line-height: 1.75; min-height: 420px; }

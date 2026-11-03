@@ -6,6 +6,8 @@ import { checkArc, type ArcCheck } from './engine/pipeline';
 import { arcPrompt } from './engine/prompts';
 import { ConfirmButton, Field, LinesField, copyText } from './ui';
 import { newCharacter } from './store';
+import OrganizePanel from './OrganizePanel';
+import { mergeChars } from './engine/organize';
 
 const HINT: Record<string, string> = {
   basics: '나이, 직업, 사는 곳, 경제 사정. 예: 42세, 지방 중소기업 과장, 전세 대출',
@@ -24,6 +26,14 @@ export default function CharactersTab({ chars, world, settings, onChange }: { ch
   const add = () => { const n = newCharacter(`인물 ${chars.length + 1}`); onChange([...chars, n]); setSel(n.id); };
 
   return (
+    <>
+    <OrganizePanel kind="chars" settings={settings} known={chars.map(x => x.name)} onApply={(raw, keep) => {
+      const r = mergeChars(chars, raw, keep, newCharacter);
+      if (!r.added && !r.updated) return 'AI 답에서 인물을 찾지 못했어요.';
+      onChange(r.value);
+      if (!sel && r.value[0] && window.innerWidth > 760) setSel(r.value[0].id);
+      return `새 인물 ${r.added}명, 채운 인물 ${r.updated}명. 왼쪽 목록에서 확인하고 고쳐 주세요.`;
+    }} />
     <div className={'split' + (c ? ' has-sel' : '')}>
       <div className="list">
         <button className="primary" onClick={add}>+ 인물 추가</button>
@@ -40,6 +50,7 @@ export default function CharactersTab({ chars, world, settings, onChange }: { ch
           : <div className="empty">왼쪽에서 인물을 고르세요.</div>}
       </div>
     </div>
+    </>
   );
 }
 

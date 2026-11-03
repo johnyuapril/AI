@@ -17,9 +17,11 @@ npm run build   # dist/ 에 웹앱
   - `prompts.ts` 원칙, 반응 생성 흐름(인지 → 감정 → 판단 → 행동과 말), 작위성 점검 규칙, 성격 변화 안내, JSON 스키마
   - `change.ts` 성격 변화 계산: 압력 쌓기(사건 하나 최대 3), 균열(문턱 절반), 전환점(문턱 + 결정적 사건, 또는 문턱 1.5배), 승인하면 뿌리 바꾸고 아크에 기록
   - `pipeline.ts` 사건 돌리기: 인물마다 반응 → 검수 → 걸리면 한 번 다시 → 상태와 압력 반영. 뒤 인물은 앞 인물의 행동과 말만 본다(속마음은 모름)
+  - `organize.ts` 작가가 붙여넣은 글을 인물/배경/사건 항목으로 정리하는 요청과 합치기
+  - `screenplay.ts` 설정·사건·반응으로 시나리오 형식 글을 쓰는 요청 (작업실 .txt 형식)
   - `ai.ts` Claude API 호출(구조화된 출력, 거절 시 서버 쪽 대체 모델), 붙여넣은 답에서 JSON 꺼내기
 - `src/store.ts` 저장(idb-keyval), `src/importer.ts` 작업실 .sbk 에서 인물 가져오기
-- 화면: `App.tsx`(탭, 배경, 설정), `CharactersTab.tsx`, `EventsTab.tsx`, `ReactionCard.tsx`
+- 화면: `App.tsx`(탭, 배경, 설정), `CharactersTab.tsx`, `EventsTab.tsx`, `ReactionCard.tsx`, `ScriptTab.tsx`, `OrganizePanel.tsx`(탭마다 AI로 채우기)
 
 ## AI 쓰는 방식 (설정 탭)
 - 복사 → 붙여넣기 (기본): 작업실처럼 요청을 복사해 외부 AI에 붙여넣고 답을 붙여넣는다. 요금 없음. 반응과 자체 점검을 한 번에 받는다.

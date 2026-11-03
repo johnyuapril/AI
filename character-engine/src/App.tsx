@@ -4,12 +4,15 @@ import { type Book, DEFAULT_SETTINGS, exportBook, loadBook, loadSettings, saveBo
 import { importFile } from './importer';
 import CharactersTab from './CharactersTab';
 import EventsTab from './EventsTab';
+import ScriptTab from './ScriptTab';
+import OrganizePanel from './OrganizePanel';
+import { mergeWorld } from './engine/organize';
 import { ConfirmButton, Field, download } from './ui';
 import { CHECK_RULES } from './engine/prompts';
 import { BUILD, VERSION, desktop, latestRelease, openExternal, RELEASES_PAGE, type Latest } from './update';
 
-type Tab = 'chars' | 'world' | 'events' | 'settings';
-const TABS: [Tab, string][] = [['chars', '인물'], ['world', '배경'], ['events', '사건'], ['settings', '설정']];
+type Tab = 'chars' | 'world' | 'events' | 'script' | 'settings';
+const TABS: [Tab, string][] = [['chars', '인물'], ['world', '배경'], ['events', '사건'], ['script', '시나리오'], ['settings', '설정']];
 
 export default function App() {
   const [book, setBookState] = useState<Book | null>(null);
@@ -41,6 +44,11 @@ export default function App() {
         {tab === 'chars' && <CharactersTab chars={book.chars} world={book.world} settings={settings} onChange={chars => setBook(b => ({ ...b, chars }))} />}
         {tab === 'world' && (
           <div className="body" style={{ margin: '0 auto' }}>
+            <OrganizePanel kind="world" settings={settings} known={book.chars.map(c => c.name)} onApply={(raw, keep) => {
+              const r = mergeWorld(book.world, raw, keep);
+              setBook(b => ({ ...b, world: r.value }));
+              return r.updated ? `${r.updated}개 칸을 채웠어요. 아래에서 확인하고 고쳐 주세요.` : '바뀐 칸이 없어요.';
+            }} />
             <div className="panel">
               <h3>배경</h3>
               <div className="muted small-t">인물의 선택지를 제한하는 현실 조건이에요. 비워 두면 현대 한국으로 봐요.</div>
@@ -52,6 +60,7 @@ export default function App() {
           </div>
         )}
         {tab === 'events' && <EventsTab book={book} setBook={setBook} settings={settings} setSettings={setSettings} />}
+        {tab === 'script' && <ScriptTab book={book} setBook={setBook} settings={settings} />}
         {tab === 'settings' && <SettingsTab book={book} setBook={setBook} settings={settings} setSettings={setSettings} upd={upd} />}
       </div>
     </div>
