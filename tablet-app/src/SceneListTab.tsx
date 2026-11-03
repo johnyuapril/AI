@@ -194,7 +194,7 @@ function DebateModal({ p, update, onClose, onNext }: { p: Project; update: WsPro
   const paste = async () => { try { const t = await navigator.clipboard.readText(); if (t) setText(t); } catch { toast('아래 칸을 길게 눌러 붙여넣기 해 주세요.'); } };
   return <Modal wide title="① 3인 토론: 감독 · 작가 · 평론가" onClose={onClose}>
     <div style={{ display: 'grid', gap: 10 }}>
-      <p className="muted small-t" style={{ margin: 0 }}>장면 묘사 전에 외부 AI가 <b>영화감독, 시나리오 작가, 평론가</b> 세 사람이 되어 시나리오를 깊이 토론해요(주제와 구조 → 인물 성격·행동 → 톤앤무드 → 카메라 언어 → 씬별 연출). 마지막 <b>[토론 결론]</b>이 저장되면 컷 나누기, 장면 묘사, 그림 프롬프트에 모두 같이 들어가요.</p>
+      <p className="muted small-t" style={{ margin: 0 }}>장면 묘사 전에 외부 AI가 <b>영화감독, 시나리오 작가, 평론가</b> 세 사람이 되어, 시나리오를 고치지 않고 <b>어떻게 이해하고 화면으로 그려 낼지</b> 깊이 토론해요(시나리오 읽기 → 인물 그려 내기 → 감정과 표정·행동 → 공간과 화면 → 씬별 화면과 카메라). 마지막 <b>[토론 결론]</b>이 저장되면 컷 나누기, 장면 묘사, 그림 프롬프트에 모두 같이 들어가요.</p>
       <div className="row">
         <b>1.</b> <button onClick={async () => { try { await saveFile(new Blob([fullScriptText(p, scenes)], { type: 'text/plain' }), scriptFileName(p)); } catch (e: any) { toast('파일 저장 실패: ' + (e?.message || e)); } }}>시나리오 파일 보내기</button>
         <span className="muted small-t">→ AI 대화창에 첨부해요</span>
@@ -213,7 +213,7 @@ function DebateModal({ p, update, onClose, onNext }: { p: Project; update: WsPro
         <button className="primary" disabled={!text.trim()} onClick={add}>모으기</button>
       </div>
       <div className="row small-t"><b>토론 결론</b><span className="muted">{p.debate ? '고칠 수 있어요. 모든 AI 요청에 같이 보내요.' : '아직 없어요. 마지막 답의 [토론 결론]이 여기 들어와요.'}</span></div>
-      <LazyText value={p.debate || ''} rows={10} placeholder={'주제: …\n톤앤무드: …\n색감·조명: …\n카메라 언어: …\n인물: 이름 - 성격, 욕망, 행동 방식 …\n씬별 연출: S#1 - …'} onSave={v => update(x => ({ ...x, debate: v.trim() || undefined }))} />
+      <LazyText value={p.debate || ''} rows={10} placeholder={'이야기의 핵심: …\n톤앤무드: …\n색감·조명: …\n카메라 언어: …\n인물: 이름 - 생김새, 몸짓, 표정 …\n공간: …\n씬별 화면: S#1 - …'} onSave={v => update(x => ({ ...x, debate: v.trim() || undefined }))} />
       {p.debateLog && <details><summary className="small-t">토론 전체 기록 보기</summary><pre style={{ whiteSpace: 'pre-wrap', fontSize: 13, maxHeight: 400, overflow: 'auto', background: 'var(--soft)', padding: 10, borderRadius: 8 }}>{p.debateLog}</pre></details>}
       <div className="row" style={{ justifyContent: 'flex-end' }}>
         <button className="primary" disabled={!p.debate} onClick={onNext}>② 이 결론으로 컷 나누기 →</button>
