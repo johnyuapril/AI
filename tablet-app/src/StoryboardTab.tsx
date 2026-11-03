@@ -18,7 +18,8 @@ interface Row { scene: Scene; cut: Cut; meta: CutMeta; ctx: string; audio: strin
 function autoCtx(c: Cut, m: CutMeta, p: WsProps['p']): string {
   const v = cutValues(p, c);
   const head = shotLabel(v);
-  const body = (m.desc || c.action || '').trim();
+  // Context 칸은 원래 대본(지문). 장면 묘사(화면 설명)는 그림 프롬프트에만 쓴다. 대본 지문이 없는 컷만 묘사로 채움
+  const body = (c.action || m.desc || '').trim();
   return [head && `[${head}]`, body].filter(Boolean).join('\n');
 }
 function autoAudio(c: Cut): string {
