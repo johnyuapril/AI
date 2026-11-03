@@ -209,8 +209,12 @@ function AiSplitModal({ p, scene, scenes, names, onClose, onApply }: { p: Projec
   };
   const [per, setPer] = useState(() => { try { return Number(localStorage.getItem('ai-split-scenes')) || 3; } catch { return 3; } });
   const setPerSave = (n: number) => { setPer(n); try { localStorage.setItem('ai-split-scenes', String(n)); } catch { /* */ } };
-  const request = () => scene ? buildCutSplitRequest(p, scene) : buildFullCutSplitRequest(p, scenes, per);
-  const copyNext = async () => { if (!next) return; toast(await copyText(buildNextRequest(next.scene, next.cut, per)) ? '복사했어요. AI 대화창에 붙여 넣으세요.' : '복사하지 못했어요.'); };
+  const firstNum = scenes[0]?.num || 1, lastNum = scenes[scenes.length - 1]?.num || 1;
+  const [rFrom, setRFrom] = useState(firstNum);
+  const [rTo, setRTo] = useState(lastNum);
+  const range = { from: Math.min(rFrom, rTo), to: Math.max(rFrom, rTo) };
+  const request = () => scene ? buildCutSplitRequest(p, scene) : buildFullCutSplitRequest(p, scenes, per, range);
+  const copyNext = async () => { if (!next) return; toast(await copyText(buildNextRequest(next.scene, next.cut, per, scene ? undefined : range.to)) ? '복사했어요. AI 대화창에 붙여 넣으세요.' : '복사하지 못했어요.'); };
   const loadFile = async () => { const [f] = await pickFiles('.txt,.md,text/plain,text/markdown'); if (f) setText(await f.text()); };
   const apply = () => {
     onApply(groups);
@@ -225,6 +229,12 @@ function AiSplitModal({ p, scene, scenes, names, onClose, onApply }: { p: Projec
       {!scene && <div className="row"><span className="small-t">한 번에 받을 씬</span>
         {[1, 3, 5, 8].map(n => <button key={n} className={'small' + (per === n ? ' primary' : '')} onClick={() => setPerSave(n)}>{n}씬씩</button>)}
         <span className="muted small-t">많이 받을수록 빠르지만 AI가 묘사를 줄여 쓸 수 있어요</span></div>}
+      {!scene && <div className="row"><span className="small-t">나눌 씬 범위</span>
+        <select value={rFrom} onChange={e => setRFrom(Number(e.target.value))}>{scenes.map(s => <option key={s.id} value={s.num}>S#{s.num}</option>)}</select>
+        <span>~</span>
+        <select value={rTo} onChange={e => setRTo(Number(e.target.value))}>{scenes.map(s => <option key={s.id} value={s.num}>S#{s.num}</option>)}</select>
+        {(range.from !== firstNum || range.to !== lastNum) && <button className="small" onClick={() => { setRFrom(firstNum); setRTo(lastNum); }}>전체로</button>}
+        <span className="muted small-t">씬 {scenes.filter(s => s.num >= range.from && s.num <= range.to).length}개 · 범위를 바꾸면 "요청 문장 복사"를 다시 눌러 주세요</span></div>}
       {!scene && <div className="row">
         <b>1.</b> <button className="primary" onClick={async () => { try { await saveFile(new Blob([fullScriptText(p, scenes)], { type: 'text/plain' }), scriptFileName(p)); } catch (e: any) { toast('파일 저장 실패: ' + (e?.message || e)); } }}>시나리오 파일 보내기</button>
         <span className="muted small-t">→ 공유 창에서 ChatGPT를 고르거나, 저장된 파일(문서/시나리오작업실)을 대화창에 첨부해요</span>

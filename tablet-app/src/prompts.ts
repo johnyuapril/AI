@@ -187,20 +187,26 @@ export function fullScriptText(p: Project, scenes: Scene[]): string {
 }
 export const scriptFileName = (p: Project) => `${(p.title || '시나리오').replace(/[\\/:*?"<>|]/g, '_')}_시나리오.txt`;
 /** 시나리오는 파일로 첨부하고, 이 요청 문장만 붙여 넣음 */
-export function buildFullCutSplitRequest(p: Project, scenes: Scene[], per = 3): string {
+export function buildFullCutSplitRequest(p: Project, scenes: Scene[], per = 3, range?: { from: number; to: number }): string {
   const looks = charList(p, p.lines);
-  const first = scenes[0]?.num || 1;
+  const nums = scenes.map(s => s.num);
+  const from = range?.from ?? nums[0] ?? 1;
+  const to = range?.to ?? nums[nums.length - 1] ?? from;
+  const inRange = nums.filter(n => n >= from && n <= to);
+  const first = inRange[0] ?? from;
+  const last = inRange[Math.min(per, inRange.length) - 1] ?? first;
+  const partial = range && (from !== nums[0] || to !== nums[nums.length - 1]);
   const parts = [...DIRECTOR_RULES.map(r => r.replace(/씬 3개/g, `씬 ${per}개`)),
-    `- 시나리오 전체는 첨부한 파일 "${scriptFileName(p)}"에 있어. 파일을 끝까지 읽고 이야기 전체를 이해한 다음 작업해 줘. (씬 ${scenes.length}개)`,
-    '', `[작품] ${p.title}`];
+    `- 시나리오 전체는 첨부한 파일 "${scriptFileName(p)}"에 있어. 파일을 끝까지 읽고 이야기 전체를 이해한 다음 작업해 줘. (씬 ${scenes.length}개)`];
+  if (partial) parts.push(`- 이번에 나눌 씬은 S#${from}부터 S#${to}까지(${inRange.length}개)야. 앞뒤 씬은 흐름 이해에만 쓰고 답하지 마. S#${to}까지 끝나면 "끝"이라고 써.`);
+  parts.push('', `[작품] ${p.title}`);
   if (looks.length) parts.push('', '[등장인물]', ...looks);
-  const last = scenes[Math.min(per, scenes.length) - 1]?.num || first;
-  parts.push('', ...ANSWER_FORMAT(first), '', `지금은 S#${first}부터 씬 ${per}개(S#${first}~S#${last})만 답해 줘.`);
+  parts.push('', ...ANSWER_FORMAT(first), '', `지금은 S#${first}부터 씬 ${Math.min(per, inRange.length || per)}개(S#${first}~S#${last})만 답해 줘.`);
   return parts.join('\n');
 }
-/** 이어 받기 요청 (마지막으로 넣은 컷 다음부터 씬 per개) */
-export function buildNextRequest(scene: number, cut: number, per: number): string {
-  return `다음. 지난 답은 [${scene}-${cut}]까지 받았어. S#${scene}가 그 컷에서 끝났으면 다음 씬의 설정표와 첫 컷부터, 아직 안 끝났으면 [${scene}-${cut + 1}]부터 이어서, 씬 ${per}개 분량을 앞과 같은 형식, 같은 자세함으로 답해 줘. 감독으로서 컷마다 충분히 검토해서, 초벌·요약 말고 최종 콘티 수준으로.`;
+/** 이어 받기 요청 (마지막으로 넣은 컷 다음부터 씬 per개, until 씬까지만) */
+export function buildNextRequest(scene: number, cut: number, per: number, until?: number): string {
+  return `다음. 지난 답은 [${scene}-${cut}]까지 받았어. S#${scene}가 그 컷에서 끝났으면 다음 씬의 설정표와 첫 컷부터, 아직 안 끝났으면 [${scene}-${cut + 1}]부터 이어서, 씬 ${per}개 분량을 앞과 같은 형식, 같은 자세함으로 답해 줘.${until ? ` S#${until}까지만 하고, 거기서 끝나면 "끝"이라고 써.` : ''} 감독으로서 컷마다 충분히 검토해서, 초벌·요약 말고 최종 콘티 수준으로.`;
 }
 
 const stripMd = (s: string) => s.replace(/\*\*|__|`/g, '').replace(/^\s*[-*•]\s+/, '').trim();
