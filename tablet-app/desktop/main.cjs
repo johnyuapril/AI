@@ -111,12 +111,26 @@ ipcMain.handle('desktop:http', async (_e, { url, method, headers, body }) => {
 });
 // 업데이트: 새 설치 파일을 받아 실행하고 앱을 닫는다 (설치가 끝나면 다시 켜짐)
 ipcMain.handle('desktop:installUpdate', async (_e, { url }) => {
-  const r = await net.fetch(url, { redirect: 'follow' });
-  if (!r.ok) throw new Error('새 버전을 받지 못했어요 (' + r.status + ')');
   const p = path.join(os.tmpdir(), 'Screenwriter-Setup.exe');
-  fs.writeFileSync(p, Buffer.from(await r.arrayBuffer()));
-  spawn(p, [], { detached: true, stdio: 'ignore' }).unref();
-  setTimeout(() => app.quit(), 500);
+  // 받는 방법을 여러 개 시도: 크롬 방식(net.fetch)이 깃허브 파일 서버에서 400을 받는 PC가 있었음
+  const tries = [
+    () => fetch(url, { redirect: 'follow', headers: { 'User-Agent': 'Screenwriter-Updater', Accept: 'application/octet-stream' } }),
+    () => net.fetch(url, { redirect: 'follow', headers: { 'User-Agent': CHROME_UA() } }),
+  ];
+  let last = '';
+  for (const t of tries) {
+    try {
+      const r = await t();
+      if (!r.ok) { last = String(r.status); continue; }
+      const buf = Buffer.from(await r.arrayBuffer());
+      if (buf.length < 1000000) { last = '파일이 너무 작아요'; continue; }
+      fs.writeFileSync(p, buf);
+      spawn(p, [], { detached: true, stdio: 'ignore' }).unref();
+      setTimeout(() => app.quit(), 500);
+      return;
+    } catch (err) { last = String(err && err.message || err); }
+  }
+  throw new Error('새 버전을 받지 못했어요 (' + last + ')');
 });
 
 app.whenReady().then(() => {

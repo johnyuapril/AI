@@ -31,7 +31,11 @@ export default function Home({ onOpen, settings, setSettings }: { onOpen: (id: s
     if (!isNative() && !isDesktop()) { openExternal(l.url); return; }
     setBusy('새 버전 받는 중…');
     if (isDesktop()) {
-      try { await installUpdate(l.url); toast('설치가 끝나면 앱이 다시 켜져요.'); } catch (e: any) { toast(String(e?.message || e)); }
+      try { await installUpdate(l.url); toast('설치가 끝나면 앱이 다시 켜져요.'); }
+      catch (e: any) {
+        toast(String(e?.message || e).replace(/^.*Error: /, '') + ' 다운로드 페이지를 열게요. .zip 을 받아 설치해 주세요.');
+        openExternal(RELEASES_PAGE);
+      }
       setBusy(''); return;
     }
     try { await installUpdate(l.url); toast('설치 화면에서 "업데이트"를 눌러 주세요.'); }
