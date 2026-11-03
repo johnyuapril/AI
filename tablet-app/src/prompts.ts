@@ -133,6 +133,7 @@ const DIRECTOR_RULES = [
   '- 씬마다 첫 컷 앞에 [설정표 씬번호]로 씬 내내 변하지 않는 장소 모습, 시간·날씨·조명, 인물별 생김새·옷차림·소지품을 정리해.',
   '- "화면"은 그 컷 한 순간에 카메라에 보이는 것만, 그림을 그릴 수 있을 만큼 2~4문장으로 구체적으로: 화면 안 배치(앞·뒤, 왼쪽·오른쪽), 인물마다 위치·방향·자세·시선·손동작·표정, 누가 누구의 어디를 어떻게 잡는지 같은 접촉. 감정, 냄새, 소리, 비유는 쓰지 말고, 설정표의 옷차림·소품을 지켜.',
   '- 연출 의도가 있으면 "연출:" 한 줄로 짧게 (왜 이 샷인지).',
+  '- 이 콘티는 웹툰으로도 만들어. 컷마다 웹툰에 글자로 넣을 "효과음:"(예: 끼이익!, 쾅!, 두근두근)과 "화면효과:"(집중선, 속도선, 번쩍, 어둡게, 흔들림 중에서)를 적어. 없으면 없음. "화면:"에는 말하는 인물이 화면 왼쪽·가운데·오른쪽 중 어디에 있는지 꼭 써.',
   '- 이건 초벌이 아니라 최종 콘티야. 한 번에 씬 3개씩 답해. 씬 수가 많다고 컷을 줄이거나 묘사를 짧게 하지 말고, 모든 컷을 같은 자세함으로. 내가 "다음"이라고 하면 이어지는 씬 3개를 같은 자세함으로 답해. (설정표는 씬마다 그 씬 첫 컷 앞에서 한 번만)',
   '- 답이 너무 길어서 중간에 끊길 것 같으면 씬이 끝나는 곳에서 멈추고 "계속"이라고 써. 시나리오의 마지막 씬까지 끝나면 마지막에 "끝"이라고 써.',
 ];
@@ -148,6 +149,8 @@ const ANSWER_FORMAT = (n: number) => [
   '대본: 그 번호의 원본 문장 전체 그대로 (여러 문장이면 모두)',
   '화면: 이 컷 한 순간에 보이는 것 (2~4문장, 위치·자세·시선·손동작·접촉)',
   '연출: 왜 이렇게 찍는지 한 줄',
+  '효과음: 웹툰 효과음 (없으면 없음)',
+  '화면효과: 집중선/속도선/번쩍/어둡게/흔들림 (없으면 없음)',
   '인물: 화면에 나오는 인물 이름 (없으면 없음)',
   '대사 번호: 이 컷에 들리는 대사 번호와 첫 두세 단어 (예: 7 (어디야 지금)) (없으면 없음)',
   '',
@@ -251,7 +254,7 @@ export function parseCutSplitAnswer(text: string, names: string[]): ParsedCut[] 
     if (m && /^\[?\s*S?#?\s*\d+\s*-\s*\d+/.test(l)) { cur = { scene: sceneOf(l), idx: cutOf(l), ...cam(m[1] || ''), src: '', see: '', dlg: [] }; out.push(cur); field = ''; continue; }
     if (/^\[?\s*설정표/.test(l)) { cur = null; field = ''; continue; }
     if (!cur || !l) continue;
-    const f = l.match(/^(대본\s*번호|대사\s*번호|대본|화면|연출|인물|대사|소리|카메라)\s*[:：]\s*(.*)$/);
+    const f = l.match(/^(대본\s*번호|대사\s*번호|대본|화면\s*효과|효과음|화면|연출|인물|대사|소리|카메라)\s*[:：]\s*(.*)$/);
     if (f) {
       field = f[1].replace(/\s/g, ''); const v = f[2].trim();
       if (field === '대본번호') { cur.srcNums = nums(v); cur.srcHints = hints(v); field = ''; }
@@ -259,6 +262,8 @@ export function parseCutSplitAnswer(text: string, names: string[]): ParsedCut[] 
       else if (field === '대본') cur.src = v;
       else if (field === '화면') cur.see = v;
       else if (field === '연출') cur.intent = v;
+      else if (field === '효과음') { cur.sfx = listOf(v); field = ''; }
+      else if (field === '화면효과') { cur.fx = listOf(v); field = ''; }
       else if (field === '인물') cur.chars = splitNames(v);
       else if (field === '카메라') Object.assign(cur, cam(v));
       else if (v) cur.dlg!.push(...parseDlg(v));
@@ -340,6 +345,10 @@ export function resolveNumbers(c: ParsedCut, scene: Scene): AICut {
     out.dlg = merged;
   }
   return out;
+}
+function listOf(v: string): string[] | undefined {
+  if (!v || /^(없음|없다|-|—)$/.test(v.trim())) return undefined;
+  return v.split(/[,，、/]/).map(x => x.trim()).filter(x => x && !/^(없음)$/.test(x));
 }
 function splitNames(v: string): string[] {
   if (!v || /^(없음|없다|-|—)$/.test(v.trim())) return [];

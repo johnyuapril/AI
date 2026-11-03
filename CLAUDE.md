@@ -10,7 +10,7 @@
 - `tablet-app/` : Vite + React + TypeScript, Capacitor 6으로 만든 안드로이드 앱
   - `src/script.ts` 대본 파싱과 컷 나누기 규칙, `src/importer.ts` PDF/HWP/HWPX/DOCX/TXT/Fountain 불러오기
   - `src/prompts.ts` 외부 AI(ChatGPT 등)에 붙여 넣을 문구, `src/store.ts` 저장(IndexedDB)
-  - 탭: 대본(ScriptTab) → 신 리스트(SceneListTab) → 장면 묘사(DescribeTab) → 그림(PromptTab) → 스토리보드(StoryboardTab) → 분석(AnalysisTab)
+  - 탭: 대본(ScriptTab) → 신 리스트(SceneListTab) → 장면 묘사(DescribeTab) → 그림(PromptTab) → 스토리보드(StoryboardTab) → 웹툰(WebtoonTab, src/webtoon.ts) → 분석(AnalysisTab)
 - `tablet-app/android/` : Capacitor 안드로이드 프로젝트
 - `tablet-app/desktop/` : 윈도우용(Electron). 같은 화면(`tablet-app/dist`)을 그대로 띄운다. `main.cjs`(파일 저장, AI 옆 창, 업데이트), `preload.cjs`(`window.desktop`)
 - **두 플랫폼은 화면 코드(`src/`)를 함께 쓴다.** 기능은 `src/`에 한 번만 만든다. 플랫폼마다 다른 일(파일 저장, 공유, AI 열기, 업데이트, 구글 전송)은 `src/native.ts`(`isNative()`=안드로이드, `isDesktop()`=윈도우)에서만 나눈다.

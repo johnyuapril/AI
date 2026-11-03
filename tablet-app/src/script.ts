@@ -110,7 +110,7 @@ export interface Unit {
 export interface Cut {
   key: string; sceneId: string; no: number; label: string; units: Unit[];
   action: string; dialogues: { speaker: string; text: string; off: boolean; paren?: string }[];
-  auto: { shot?: string; angle?: string; move?: string; chars: string[]; src: string; note?: string };
+  auto: { shot?: string; angle?: string; move?: string; chars: string[]; src: string; note?: string; sfx?: string[]; fx?: string[]; see?: string };
   seconds: number;
 }
 
@@ -261,7 +261,7 @@ function aiCutsToCuts(scene: Scene, list: AICut[], names: string[]): Cut[] {
     return {
       key: aiKey(scene.id, i), sceneId: scene.id, no: i + 1, label: `${scene.num}-${i + 1}`,
       units: [], action: a.src || a.see, dialogues,
-      auto: { shot: a.shot, angle: a.angle, move: a.move, chars, src: 'AI', note: [a.cam, a.intent && '연출: ' + a.intent].filter(Boolean).join(' · ') || undefined },
+      auto: { shot: a.shot, angle: a.angle, move: a.move, chars, src: 'AI', note: [a.cam, a.intent && '연출: ' + a.intent].filter(Boolean).join(' · ') || undefined, sfx: a.sfx, fx: a.fx, see: a.see },
       seconds: Math.max(2, Math.round((a.src || a.see).length / 14 + dlgLen / 7)),
     };
   });

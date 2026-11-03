@@ -38,7 +38,7 @@ textarea { resize: vertical; line-height: 1.55; }
 .topbar { height: var(--bar); display: flex; align-items: center; gap: 8px; padding: 0 12px; background: var(--paper); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 20; }
 .topbar .title { font-weight: 700; font-size: 18px; border: none; background: transparent; min-width: 120px; max-width: 280px; }
 .tabs { display: flex; gap: 4px; margin-left: 8px; overflow-x: auto; }
-.tabs button { border: none; background: transparent; font-weight: 600; color: var(--muted); padding: 0 16px; min-height: 44px; border-radius: 10px; }
+.tabs button { border: none; background: transparent; font-weight: 600; color: var(--muted); padding: 0 12px; min-height: 44px; border-radius: 10px; }
 .tabs button.on { background: var(--ink); color: #fff; }
 
 .app { height: 100%; display: flex; flex-direction: column; }
@@ -183,3 +183,37 @@ table.grid input, table.grid textarea { width: 100%; min-height: 36px; padding: 
   .prow { grid-template-columns: 1fr; }
 }
 @media print { .topbar, .toolbar { display: none !important; } }
+
+/* 웹툰 */
+.wt-strip { display: flex; flex-direction: column; align-items: center; padding-bottom: 60px; }
+.wt-scene { width: 720px; background: #fff; padding: 0 0 80px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+.wt-title { padding: 36px 40px 28px; font-weight: 800; font-size: 20px; text-align: center; color: #333; }
+.wt-panel { margin-bottom: 56px; }
+.wt-box { position: relative; width: 720px; overflow: hidden; background: #fff; touch-action: auto; }
+.wt-panel.editing .wt-box { outline: 2px dashed var(--accent); }
+.wt-panel.editing .wt-bubble, .wt-panel.editing .wt-sfx { touch-action: none; cursor: grab; }
+.wt-img img { display: block; width: 720px; height: auto; }
+.wt-ghost { position: absolute; inset: 0; opacity: .35; transform: translate(8px, 3px); pointer-events: none; }
+.wt-ghost img { display: block; width: 720px; height: auto; }
+.wt-empty { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 10px; padding: 30px 60px; background: #f2f2ef; color: #888; text-align: center; font-size: 15px; line-height: 1.5; }
+.wt-empty i { font-size: 13px; color: #aaa; }
+.wt-fx { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.wt-bubble { position: absolute; transform: translate(-50%, -50%); max-width: 44%; min-width: 90px; padding: 20px 28px; user-select: none; }
+.wt-bubble.k-shout { padding: 34px 40px; }
+.wt-bubble.k-off, .wt-bubble.k-nar { padding: 12px 18px; }
+.wt-shape { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.wt-tail { position: absolute; top: calc(100% - 6px); width: 26px; height: 30px; overflow: visible; }
+.wt-bubble.k-shout .wt-tail { top: calc(100% - 12px); }
+.wt-text { position: relative; font-size: 17px; line-height: 1.4; font-weight: 600; color: #111; text-align: center; word-break: keep-all; overflow-wrap: anywhere; white-space: pre-wrap; }
+.wt-bubble.k-shout .wt-text { font-weight: 900; font-size: 19px; }
+.wt-bubble.k-nar .wt-text { text-align: left; font-weight: 500; }
+.wt-text small { display: block; font-size: 11px; color: #777; font-weight: 600; }
+.wt-sfx { position: absolute; font-weight: 900; font-style: italic; letter-spacing: -1px; white-space: nowrap; user-select: none; line-height: 1;
+  text-shadow: 3px 0 #111, -3px 0 #111, 0 3px #111, 0 -3px #111, 2px 2px #111, -2px -2px #111, 2px -2px #111, -2px 2px #111, 5px 5px 0 rgba(0,0,0,.35); }
+.wt-bubble.sel .wt-shape, .wt-sfx.sel { filter: drop-shadow(0 0 4px var(--accent)); }
+.wt-tools { width: 720px; background: var(--paper); border: 1px solid var(--line); border-top: none; padding: 8px; border-radius: 0 0 10px 10px; }
+.wt-tail2 { position: absolute; top: calc(100% - 4px); width: 0; height: 0; }
+.wt-tail2 i, .wt-tail2 b { position: absolute; left: 0; width: 0; height: 0; border-style: solid; border-color: transparent; }
+.wt-tail2 i { top: 0; margin-left: -11px; border-width: 28px 11px 0 11px; border-top-color: #111; }
+.wt-tail2 b { top: -1px; margin-left: -7.5px; border-width: 23px 7.5px 0 7.5px; border-top-color: #fff; }
+.wt-bubble.k-shout .wt-tail2 { top: calc(100% - 12px); }

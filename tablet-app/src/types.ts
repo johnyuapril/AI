@@ -14,7 +14,13 @@ export interface CutMeta {
   img?: string;       // 이미지 id
   ctx?: string; audio?: string; time?: string; // 스토리보드 칸 직접 고친 값
   wait?: boolean;     // 그림 기다리는 중
+  wt?: WebtoonPanel;  // 웹툰 칸 직접 고친 값 (없으면 자동)
 }
+export type BubbleKind = 'talk' | 'shout' | 'think' | 'off' | 'nar';
+export interface Bubble { id: string; speaker: string; text: string; kind: BubbleKind; x: number; y: number; tx?: number } // x,y: 칸 안 비율(0~1, 말풍선 가운데), tx: 꼬리가 가리키는 인물 x
+export interface Sfx { id: string; text: string; x: number; y: number; size: number; rot: number; color?: string }
+export type FxKind = 'focus' | 'speed' | 'flash' | 'dark' | 'shake';
+export interface WebtoonPanel { bubbles: Bubble[]; sfx: Sfx[]; fx: FxKind[]; gap?: number }
 export interface SceneMeta {
   summary?: string; notes?: string;
   breaks?: string[];  // 직접 추가한 컷 나눔(단위 id)
@@ -31,6 +37,8 @@ export interface AICut {
   see: string;        // 화면 핵심
   chars?: string[];
   dlg?: { speaker: string; text: string; off: boolean }[];
+  sfx?: string[];     // 웹툰 효과음
+  fx?: string[];      // 웹툰 화면효과
 }
 export interface Project {
   id: string; title: string; team: string; format: Format;

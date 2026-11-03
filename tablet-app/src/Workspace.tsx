@@ -7,6 +7,7 @@ import SceneListTab from './SceneListTab';
 import DescribeTab from './DescribeTab';
 import PromptTab from './PromptTab';
 import StoryboardTab from './StoryboardTab';
+import WebtoonTab from './WebtoonTab';
 import AnalysisTab from './AnalysisTab';
 import { Modal, useToast } from './ui';
 import { importFile, toFountain } from './importer';
@@ -19,8 +20,8 @@ import GoogleSyncModal from './GoogleSync';
 
 export type Updater = (fn: (p: Project) => Project) => void;
 export interface WsProps { p: Project; update: Updater; settings: Settings; setSettings: (s: Settings) => void; go: (tab: Tab, sceneId?: string) => void; focusScene?: string }
-type Tab = 'script' | 'list' | 'desc' | 'prompt' | 'board' | 'analysis';
-const TABS: [Tab, string][] = [['script', '대본'], ['list', '신 리스트'], ['desc', '장면 묘사'], ['prompt', '그림'], ['board', '스토리보드'], ['analysis', '분석']];
+type Tab = 'script' | 'list' | 'desc' | 'prompt' | 'board' | 'webtoon' | 'analysis';
+const TABS: [Tab, string][] = [['script', '대본'], ['list', '신 리스트'], ['desc', '장면 묘사'], ['prompt', '그림'], ['board', '스토리보드'], ['webtoon', '웹툰'], ['analysis', '분석']];
 
 export default function Workspace({ id, onClose, settings, setSettings }: { id: string; onClose: () => void; settings: Settings; setSettings: (s: Settings) => void }) {
   const [p, setP] = useState<Project | null>(null);
@@ -112,6 +113,7 @@ export default function Workspace({ id, onClose, settings, setSettings }: { id: 
         {tab === 'desc' && <DescribeTab {...props} />}
         {tab === 'prompt' && <PromptTab {...props} />}
         {tab === 'board' && <StoryboardTab {...props} />}
+        {tab === 'webtoon' && <WebtoonTab {...props} />}
         {tab === 'analysis' && <AnalysisTab {...props} />}
       </div>
       {menu && <Modal title="파일" onClose={() => setMenu(false)}>
