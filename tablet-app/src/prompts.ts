@@ -1,5 +1,5 @@
 import type { AICut, Project, Settings } from './types';
-import { type Cut, type Scene, type Unit, cutValues, isNightTime, sceneUnits, splitSentences } from './script';
+import { type Cut, type Scene, type Unit, cutValues, getScenes, isNightTime, sceneUnits, splitSentences } from './script';
 import { SHOT_SIZES, ANGLES, MOVES, termLabel, parseShotLine } from './shots';
 import { cleanPasted, unescapeMd } from './util';
 
@@ -32,7 +32,9 @@ export function buildDescribeRequest(p: Project, scene: Scene, cuts: Cut[], s: S
     '',
     `[씬] S#${scene.num}. ${scene.heading}`,
   ];
+  parts.push(...bibleBlock(p));
   if (looks.length) parts.push('', '[인물 외모 (정해 둔 설정, 꼭 지켜 줘)]', ...looks);
+  if (!p.bible?.trim()) parts.push('', '[전체 씬 흐름 (앞뒤 이야기 참고)]', ...sceneOutline(p, scene.num));
   if (meta.setTable?.trim()) parts.push('', '[지금 설정표 (고쳐 쓴 내용이니 지켜 줘)]', meta.setTable.trim());
   if (corr.length) parts.push('', '[바로잡기 (꼭 반영해 줘)]', ...corr);
   parts.push('', '[대본]', sceneScript(scene), '', '[컷 목록]');
@@ -128,7 +130,11 @@ const DIRECTOR_RULES = [
   '- 기계적으로 문장마다 자르지 말고, 이야기 전체의 흐름과 인물의 감정을 생각해서 감독으로서 직접 판단해: 관객에게 정보를 공개하는 순서, 샷과 샷의 연결, 인물의 위치와 동작, 카메라의 움직임.',
   '- 한 컷 = 카메라가 끊기지 않고 보여 주는 한 화면. 한 문장 안에서도 보이는 대상, 크기, 장소가 바뀌면 컷을 나눠. (예: 항공 전경 → 도로 → 코너에서 나타나는 차)',
   '- 대본의 문장마다 (1), (2) 처럼 번호가 붙어 있어. 컷마다 그 컷이 보여 주는 대본 지문의 번호를 적고, "대본:" 줄에 그 번호의 원본 문장 전체를 한 글자도 바꾸지 말고 그대로 옮겨 적어 (어느 문장을 그렇게 묘사했는지 확인용. 이 시나리오는 내가 쓴 작품이야). 번호는 대본에 적힌 번호 그대로 쓰고 새로 세지 마. 대사·소리는 그게 들리는 동안 화면에 보이는 컷에 번호로 넣어.',
+  '- 시나리오 전체를 끝까지 먼저 읽고 작업해. 뒤 씬에서 처음 드러나는 설정(인물의 나이·직업·관계·생김새·옷차림·버릇, 장소의 구조와 위치, 차량·소품, 시대·계절, 숨겨진 사실)도 앞 씬부터 일관되게 반영하고, 이 씬만 보고 추측해서 엉뚱하게 만들지 마. [작품 설정]이 있으면 꼭 지켜.',
   '- 샷 크기는 EWS, WS, FS, MS, MCU, CU, ECU, OTS, 2S 중에서, 앵글과 카메라 움직임은 한국어로 써.',
+  '- 실제 영화처럼 카메라 위치를 다양하게 설계해. 같은 방향에서 크기만 바꾸지 말고, 컷마다 카메라가 공간의 어디에서 누구를 어느 방향으로 보는지 정해: 정면·측면·45도·뒤에서, 어깨 너머(OTS), 인물 시점(POV), 맞은편 리버스 샷, 하이앵글·로우앵글·부감(위에서 수직)·앙각, 기울인 더치 앵글, 앞쪽에 사물·인물을 걸친 전경 구도, 손·소품 인서트, 듣는 사람 리액션 컷, 문틈·창 너머·거울 반사 같은 프레임 속 프레임.',
+  '- 장면마다 커버리지를 짜: 공간을 처음 보여 줄 땐 설정 샷, 대화는 180도 선을 지키며 리버스·OTS를 주고받고, 긴장·위압·고립 같은 감정은 앵글 높이와 거리로 표현해. 같은 카메라 위치와 방향이 두 컷 연속 나오지 않게 하고, 한 씬 안에서 앵글 높이도 섞어.',
+  '- 렌즈 느낌(광각·표준·망원)과 카메라 높이(바닥·허리·눈높이·머리 위)도 정해.',
   '- 컷 번호는 [씬번호-컷번호] 로. (예: [12-3] 은 12번 씬의 세 번째 컷)',
   '- 씬마다 첫 컷 앞에 [설정표 씬번호]로 씬 내내 변하지 않는 장소 모습, 시간·날씨·조명, 인물별 생김새·옷차림·소지품을 정리해.',
   '- "화면"은 그 컷 한 순간에 카메라에 보이는 것만, 그림을 그릴 수 있을 만큼 2~4문장으로 구체적으로: 화면 안 배치(앞·뒤, 왼쪽·오른쪽), 인물마다 위치·방향·자세·시선·손동작·표정, 누가 누구의 어디를 어떻게 잡는지 같은 접촉. 감정, 냄새, 소리, 비유는 쓰지 말고, 설정표의 옷차림·소품을 지켜.',
@@ -144,10 +150,10 @@ const ANSWER_FORMAT = (n: number) => [
   '시간·날씨·조명: …',
   '인물: 이름 - 생김새, 옷차림, 소지품 (한 사람씩 한 줄)',
   '',
-  `[${n}-1] 샷 크기 / 앵글 / 카메라 움직임`,
+  `[${n}-1] 샷 크기 / 카메라 위치·방향 (예: 지영 오른쪽 45도 앞, 영민 어깨 너머) / 앵글 높이 (예: 로우앵글) / 움직임 / 렌즈`,
   '대본 번호: 이 컷에 해당하는 지문 번호 (예: 2 또는 3-4)',
   '대본: 그 번호의 원본 문장 전체 그대로 (여러 문장이면 모두)',
-  '화면: 이 컷 한 순간에 보이는 것 (2~4문장, 위치·자세·시선·손동작·접촉)',
+  '화면: 이 컷 한 순간에 보이는 것 (2~4문장, 카메라가 어디서 보는지로 시작, 위치·자세·시선·손동작·접촉)',
   '연출: 왜 이렇게 찍는지 한 줄',
   '효과음: 웹툰 효과음 (없으면 없음)',
   '화면효과: 집중선/속도선/번쩍/어둡게/흔들림 (없으면 없음)',
@@ -175,11 +181,27 @@ export function unitsByNumber(scene: Scene): Unit[] { return sceneUnits(scene); 
 function charList(p: Project, lines: { text: string }[]): string[] {
   return p.chars.filter(ch => lines.some(l => l.text.includes(ch.name))).map(ch => `${ch.name}${ch.look.trim() ? ': ' + ch.look.trim() : ''}`);
 }
+/** 작품 설정 (있으면 모든 요청에) */
+function bibleBlock(p: Project): string[] {
+  return p.bible?.trim() ? ['', '[작품 설정 (시나리오 전체에서 정리한 것, 꼭 지켜)]', p.bible.trim()] : [];
+}
+/** 다른 씬들의 흐름: 씬 제목과 첫 지문 */
+export function sceneOutline(p: Project, current?: number): string[] {
+  return getScenes(p.lines).map(s => {
+    const first = sceneUnits(s).filter(u => u.kind !== 'dlg').map(u => u.text).slice(0, 2).join(' ');
+    const ppl = [...new Set(sceneUnits(s).filter(u => u.kind === 'dlg' && u.speaker).map(u => u.speaker))].slice(0, 5).join(', ');
+    return `${s.num === current ? '▶ ' : ''}S#${s.num}. ${s.heading}${first ? ' — ' + (first.length > 70 ? first.slice(0, 68) + '…' : first) : ''}${ppl ? ` (말하는 인물: ${ppl})` : ''}`;
+  });
+}
 export function buildCutSplitRequest(p: Project, scene: Scene): string {
-  const looks = charList(p, scene.lines);
-  const parts = [...DIRECTOR_RULES, '', `[씬] S#${scene.num}. ${scene.heading}`];
+  const looks = charList(p, p.lines);
+  const parts = [...DIRECTOR_RULES.filter(r => !/한 번에 씬 3개씩|"계속"이라고/.test(r)),
+    `- 이번에는 S#${scene.num} 한 씬만 나눠. 시나리오 파일을 첨부했으면 전체를 읽고, 없으면 아래 [작품 설정]과 [전체 씬 흐름]으로 앞뒤 이야기를 이해한 다음 작업해.`];
+  if (!p.bible?.trim()) parts.push('- 시나리오 파일을 첨부했으면 답 맨 앞에 [작품 설정]을 써: 인물별(나이, 직업, 관계, 생김새, 늘 입는 옷, 소지품), 주요 장소, 차량·소품, 시대·계절을 뒤 씬에서 드러나는 것까지 한 줄씩.');
+  parts.push(...bibleBlock(p));
   if (looks.length) parts.push('', '[등장인물]', ...looks);
-  parts.push('', '[대본]', numberedScene(scene), '', ...ANSWER_FORMAT(scene.num));
+  parts.push('', '[전체 씬 흐름]', ...sceneOutline(p, scene.num));
+  parts.push('', `[씬] S#${scene.num}. ${scene.heading}`, '', '[대본]', numberedScene(scene), '', ...ANSWER_FORMAT(scene.num));
   return parts.join('\n');
 }
 /** 첨부할 시나리오 파일 내용 */
@@ -202,6 +224,8 @@ export function buildFullCutSplitRequest(p: Project, scenes: Scene[], per = 3, r
   const parts = [...DIRECTOR_RULES.map(r => r.replace(/씬 3개/g, `씬 ${per}개`)),
     `- 시나리오 전체는 첨부한 파일 "${scriptFileName(p)}"에 있어. 파일을 끝까지 읽고 이야기 전체를 이해한 다음 작업해 줘. (씬 ${scenes.length}개)`];
   if (partial) parts.push(`- 이번에 나눌 씬은 S#${from}부터 S#${to}까지(${inRange.length}개)야. 앞뒤 씬은 흐름 이해에만 쓰고 답하지 마. S#${to}까지 끝나면 "끝"이라고 써.`);
+  if (!p.bible?.trim()) parts.push('- 첫 답의 맨 앞에 [작품 설정]을 써: 시나리오 전체를 읽고 인물별(나이, 직업, 관계, 생김새, 늘 입는 옷, 소지품, 버릇), 주요 장소별(구조, 위치, 분위기), 차량·소품, 시대·계절을 한 줄씩. 뒤 씬에서 드러나는 것까지 모두. 그다음 [설정표]와 컷을 써.');
+  parts.push(...bibleBlock(p));
   parts.push('', `[작품] ${p.title}`);
   if (looks.length) parts.push('', '[등장인물]', ...looks);
   parts.push('', ...ANSWER_FORMAT(first), '', `지금은 S#${first}부터 씬 ${Math.min(per, inRange.length || per)}개(S#${first}~S#${last})만 답해 줘.`);
@@ -276,6 +300,19 @@ export function parseCutSplitAnswer(text: string, names: string[]): ParsedCut[] 
   }
   void names;
   return out;
+}
+/** 답 속 [작품 설정] 덩어리 */
+export function parseBible(text: string): string | undefined {
+  const lines = unescapeMd(text.replace(/\r/g, '')).split('\n');
+  let on = false; const buf: string[] = [];
+  for (const raw of lines) {
+    const l = stripMd(raw);
+    if (/^\[?\s*작품\s*설정\s*\]?\s*[:：]?\s*$/.test(l)) { on = true; continue; }
+    if (on && (/^\[?\s*설정표/.test(l) || /^\[?\s*S?#?\s*\d+\s*-\s*\d+/.test(l))) break;
+    if (on) buf.push(raw.trim());
+  }
+  const t = buf.join('\n').trim();
+  return t || undefined;
 }
 /** 답 속 [설정표 n] → 씬 번호별 설정표 */
 export function parseSetTables(text: string): Record<number, string> {

@@ -47,6 +47,7 @@ export interface Project {
   scenes: Record<string, SceneMeta>;
   cuts: Record<string, CutMeta>;
   sbFormat?: string; aspect?: string;
+  bible?: string;     // 작품 설정 (시나리오 전체에서 AI가 정리한 인물·장소·소품·시대, 모든 AI 요청에 같이 보냄)
   createdAt: number; updatedAt: number;
 }
 export interface ProjectSummary { id: string; title: string; updatedAt: number; sceneCount: number; lineCount: number }

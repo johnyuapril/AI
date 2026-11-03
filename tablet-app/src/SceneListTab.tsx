@@ -2,11 +2,11 @@ import { useMemo, useRef, useState } from 'react';
 import type { WsProps } from './Workspace';
 import type { Project } from './types';
 import { applyAiCuts, autoSummary, cutValues, estimatePages, getCuts, getScenes, isAiScene, knownNames, mergeCuts, resetBreaks, sceneStats, splitAt, type Cut, type Scene } from './script';
-import { buildCutSplitRequest, buildFullCutSplitRequest, fullScriptText, buildNextRequest, parseCutSplitAnswer, parseSetTables, resolveNumbers, scriptFileName } from './prompts';
+import { buildCutSplitRequest, buildFullCutSplitRequest, fullScriptText, buildNextRequest, parseBible, parseCutSplitAnswer, parseSetTables, resolveNumbers, scriptFileName } from './prompts';
 import { copyText } from './util';
 import type { AICut } from './types';
 import { ANGLES, MOVES, SHOT_SIZES, termLabel } from './shots';
-import { Modal, useToast } from './ui';
+import { LazyText, Modal, useToast } from './ui';
 import { toCSV } from './util';
 import { openAiSide, pickFiles, saveFile } from './native';
 import { cutRows, sceneRows } from './exports';
@@ -65,7 +65,7 @@ export default function SceneListTab({ p, update, go }: WsProps) {
           })}
         </tbody>
       </table>
-      {allAi && <AiSplitModal p={p} scenes={scenes} names={names} onClose={() => setAllAi(false)} onApply={g => update(x => g.reduce((acc, [sc, list, st, keep]) => applyAiCuts(acc, sc, list, undefined, st, keep), x))} />}
+      {allAi && <AiSplitModal p={p} scenes={scenes} names={names} onBible={t => update(x => ({ ...x, bible: t }))} onClose={() => setAllAi(false)} onApply={g => update(x => g.reduce((acc, [sc, list, st, keep]) => applyAiCuts(acc, sc, list, undefined, st, keep), x))} />}
     </div></div>
   );
 }
@@ -92,7 +92,7 @@ function CutBoard({ p, update, scene, cuts, names }: { p: Project; update: WsPro
       <div className="grow" />
       <button className="small primary" onClick={() => setAiOpen(true)}>AI로 컷 나누기</button>
     </div>
-    {aiOpen && <AiSplitModal p={p} scene={scene} scenes={[scene]} names={names} onClose={() => setAiOpen(false)} onApply={g => update(x => g.reduce((acc, [sc, list, st, keep]) => applyAiCuts(acc, sc, list, undefined, st, keep), x))} />}
+    {aiOpen && <AiSplitModal p={p} scene={scene} scenes={[scene]} names={names} onBible={t => update(x => ({ ...x, bible: t }))} onClose={() => setAiOpen(false)} onApply={g => update(x => g.reduce((acc, [sc, list, st, keep]) => applyAiCuts(acc, sc, list, undefined, st, keep), x))} />}
     <div className="cuts">
       {cuts.map((c, i) => {
         const v = cutValues(p, c); const m = p.cuts[c.key] || {};
@@ -173,7 +173,9 @@ export function CharPick({ all, value, manual, onClose, onSave, label }: { all: 
   </Modal>;
 }
 
-function AiSplitModal({ p, scene, scenes, names, onClose, onApply }: { p: Project; scene?: Scene; scenes: Scene[]; names: string[]; onClose: () => void; onApply: (byScene: [Scene, AICut[], string?, number?][]) => void }) {
+function AiSplitModal({ p, scene, scenes, names, onClose, onApply, onBible }: { p: Project; scene?: Scene; scenes: Scene[]; names: string[]; onClose: () => void; onApply: (byScene: [Scene, AICut[], string?, number?][]) => void; onBible: (t: string) => void }) {
+  const [bibleOpen, setBibleOpen] = useState(false);
+  const allScenes = useMemo(() => getScenes(p.lines), [p.lines]);
   const toast = useToast();
   const [text, setText] = useState('');
   const [done, setDone] = useState<number[]>([]);
@@ -216,7 +218,9 @@ function AiSplitModal({ p, scene, scenes, names, onClose, onApply }: { p: Projec
   const request = () => scene ? buildCutSplitRequest(p, scene) : buildFullCutSplitRequest(p, scenes, per, range);
   const copyNext = async () => { if (!next) return; toast(await copyText(buildNextRequest(next.scene, next.cut, per, scene ? undefined : range.to)) ? '복사했어요. AI 대화창에 붙여 넣으세요.' : '복사하지 못했어요.'); };
   const loadFile = async () => { const [f] = await pickFiles('.txt,.md,text/plain,text/markdown'); if (f) setText(await f.text()); };
+  const bibleIn = useMemo(() => text.trim() ? parseBible(text) : undefined, [text]);
   const apply = () => {
+    if (bibleIn && !p.bible?.trim()) { onBible(bibleIn); toast('작품 설정도 저장했어요. 다음 요청부터 같이 보내요.'); }
     onApply(groups);
     const nums = groups.map(g => g[0].num);
     toast(`S#${nums[0]}${nums.length > 1 ? '~' + nums[nums.length - 1] : ''}까지 넣었어요 (지금 답 ${parsed.length}컷).`);
@@ -235,16 +239,23 @@ function AiSplitModal({ p, scene, scenes, names, onClose, onApply }: { p: Projec
         <select value={rTo} onChange={e => setRTo(Number(e.target.value))}>{scenes.map(s => <option key={s.id} value={s.num}>S#{s.num}</option>)}</select>
         {(range.from !== firstNum || range.to !== lastNum) && <button className="small" onClick={() => { setRFrom(firstNum); setRTo(lastNum); }}>전체로</button>}
         <span className="muted small-t">씬 {scenes.filter(s => s.num >= range.from && s.num <= range.to).length}개 · 범위를 바꾸면 "요청 문장 복사"를 다시 눌러 주세요</span></div>}
-      {!scene && <div className="row">
-        <b>1.</b> <button className="primary" onClick={async () => { try { await saveFile(new Blob([fullScriptText(p, scenes)], { type: 'text/plain' }), scriptFileName(p)); } catch (e: any) { toast('파일 저장 실패: ' + (e?.message || e)); } }}>시나리오 파일 보내기</button>
-        <span className="muted small-t">→ 공유 창에서 ChatGPT를 고르거나, 저장된 파일(문서/시나리오작업실)을 대화창에 첨부해요</span>
+      <div className="row small-t" style={{ background: 'var(--soft)', padding: 8, borderRadius: 8 }}>
+        <b>작품 설정</b>
+        <span className="muted">{p.bible?.trim() ? `${p.bible.trim().split('\n').length}줄 · 모든 AI 요청에 같이 보내요 (뒤 씬 설정까지 반영)` : '아직 없어요. 전체 컷 나누기의 첫 답에서 AI가 정리해 주면 자동으로 저장돼요.'}</span>
+        <button className="small" onClick={() => setBibleOpen(!bibleOpen)}>{bibleOpen ? '닫기' : p.bible?.trim() ? '보기·고치기' : '직접 쓰기'}</button>
+        {bibleIn && p.bible?.trim() && <button className="small" onClick={() => { onBible(bibleIn); toast('작품 설정을 새 답으로 바꿨어요.'); }}>답의 작품 설정으로 바꾸기</button>}
+      </div>
+      {bibleOpen && <LazyText value={p.bible || ''} rows={8} placeholder={'인물: 지영 - 28세, 택시 회사 사장 딸, 갈색 웨이브 머리, 빨간 매니큐어\n장소: 망원역 앞 - 4차선 사거리, 언덕 위 주택가\n차량·소품: 지영의 진녹색 구형 재규어, 빨간 폴더폰\n시대·계절: 2000년대 초, 늦가을'} onSave={v => onBible(v)} />}
+      {<div className="row">
+        <b>1.</b> <button className={scene ? '' : 'primary'} onClick={async () => { try { await saveFile(new Blob([fullScriptText(p, allScenes)], { type: 'text/plain' }), scriptFileName(p)); } catch (e: any) { toast('파일 저장 실패: ' + (e?.message || e)); } }}>시나리오 파일 보내기</button>
+        <span className="muted small-t">→ {scene ? '(권장) 시나리오 전체를 같이 주면 뒤 씬 설정까지 반영돼요. ' : ''}공유 창에서 ChatGPT를 고르거나, 저장된 파일(문서/시나리오작업실)을 대화창에 첨부해요</span>
       </div>}
       <div className="row">
-        <b>{scene ? '1.' : '2.'}</b> <button className="primary" onClick={async () => toast(await copyText(request()) ? '복사했어요. 파일을 첨부한 대화창에 붙여 넣으세요.' : '복사하지 못했어요.')}>{scene ? '컷 나누기 요청 복사' : '요청 문장 복사'}</button>
+        <b>2.</b> <button className="primary" onClick={async () => toast(await copyText(request()) ? '복사했어요. 파일을 첨부한 대화창에 붙여 넣으세요.' : '복사하지 못했어요.')}>{scene ? '컷 나누기 요청 복사' : '요청 문장 복사'}</button>
         <button onClick={() => openAiSide()}>AI 옆 화면에 열기 ◫</button>
         <span className="muted small-t">→ {scene ? '외부 AI에 붙여 넣고 답을 받아요' : '파일과 함께 보내요'}</span>
       </div>
-      <div className="row"><b>{scene ? '2.' : '3.'}</b> <button onClick={paste}>AI 답 붙여넣기</button><button onClick={loadFile}>답 파일 불러오기</button><span className="muted small-t">또는 아래 칸에 직접 붙여넣기 (표로 답해도 돼요)</span></div>
+      <div className="row"><b>3.</b> <button onClick={paste}>AI 답 붙여넣기</button><button onClick={loadFile}>답 파일 불러오기</button><span className="muted small-t">또는 아래 칸에 직접 붙여넣기 (표로 답해도 돼요)</span></div>
       <textarea value={text} onChange={e => setText(e.target.value)} rows={10} style={{ width: '100%', fontSize: 14 }} placeholder={`[${scene?.num ?? 1}-1] EWS / 하이앵글 / 고정\n대본 번호: 1\n화면: …\n인물: 없음\n대사 번호: 없음`} />
       {text.trim() && <div className="small-t">{total ? <>읽은 결과: {groups.map(g => `S#${g[0].num} ${g[1].length}컷${g[2] ? '+설정표' : ''}`).join(', ').slice(0, 400)}</> : <span style={{ color: 'var(--accent)' }}>컷을 찾지 못했어요. [1-1] 같은 컷 번호가 있는지 확인해 주세요.</span>}</div>}
       {next && <div className="row small-t" style={{ background: 'var(--accent-soft)', padding: 8, borderRadius: 8 }}>
