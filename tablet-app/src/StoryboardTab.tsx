@@ -5,7 +5,7 @@ import { getCuts, getScenes, knownNames, cutValues, type Cut, type Scene } from 
 import { shotLabel } from './shots';
 import { Img, Modal, useToast } from './ui';
 import { pickFiles, saveFile } from './native';
-import { imageFromClipboard, imageFromPaste, storeImageFile } from './images';
+import { flipImage, imageFromClipboard, imageFromPaste, storeImageFile } from './images';
 import { pagesToPdf } from './pdf';
 import DrawPad from './DrawPad';
 import { toCSV } from './util';
@@ -213,6 +213,7 @@ function ImgEdit({ row, ratio, onSet, onRemove, onClose }: { row: Row; ratio: nu
           <div className="row" style={{ justifyContent: 'center' }}>
             <button onClick={() => pickFiles('image/*').then(f => f[0] && onSet(f[0]))}>갤러리에서 고르기</button>
             <button onClick={async () => { const b = await imageFromClipboard(); if (b) onSet(b); else toast('클립보드에 그림이 없어요. 아래 칸을 길게 눌러 붙여넣기 해 보세요.'); }}>붙여넣기</button>
+            {row.meta.img && <button onClick={async () => { const b = await flipImage(row.meta.img!); if (b) onSet(b); }}>좌우 반전 ⇋</button>}
             {row.meta.img && <button onClick={onRemove}>그림 빼기</button>}
           </div>
           <div contentEditable suppressContentEditableWarning className="muted small-t"

@@ -6,7 +6,7 @@ import { autoCommon, autoCutPrompt, commonFor, cutPromptFor, fullCutPrompt, mast
 import { Img, LazyText, Lightbox, useToast } from './ui';
 import { copyText } from './util';
 import { pickFiles, shareImage } from './native';
-import { imageFromClipboard, imageFromPaste, storeImageFile } from './images';
+import { flipImage, imageFromClipboard, imageFromPaste, storeImageFile } from './images';
 import { getImageBlob } from './store';
 import { DEFAULT_STYLE } from './store';
 
@@ -138,6 +138,7 @@ function CutPromptRow({ p, scene, cut, prev, onCopy, setCut, onBig }: { p: Proje
       <div className="row" style={{ marginTop: 6, gap: 4 }}>
         <button className="small" onClick={() => pickFiles('image/*').then(f => f[0] && put(f[0]))}>갤러리</button>
         <button className="small" onClick={async () => { const b = await imageFromClipboard(); if (b) put(b); else toast('클립보드에 그림이 없어요. 그림 칸을 길게 눌러 붙여넣기 하거나 갤러리에서 고르세요.'); }}>붙여넣기</button>
+        {m.img && <button className="small" title="그림 좌우 반전" onClick={async () => { const b = await flipImage(m.img!); if (b) { const id = await storeImageFile(b); setCut(cut.key, { img: id }); } }}>좌우 반전 ⇋</button>}
         {m.img && <button className="small danger" onClick={() => setCut(cut.key, { img: undefined })}>빼기</button>}
       </div>
       <div contentEditable suppressContentEditableWarning className="small-t muted" style={{ marginTop: 4, padding: 6, border: '1px dashed var(--line)', borderRadius: 6, minHeight: 32 }}
