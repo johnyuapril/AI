@@ -69,6 +69,8 @@ export function autoCommon(p: Project, scene: Scene, s: Settings): string {
   const night = isNightTime(scene.time, sceneText);
   const parts = [s.promptHeader.trim()];
   if (s.styleText.trim()) parts.push('그림체: ' + s.styleText.trim());
+  const mood = (p.debate || '').split('\n').filter(l => /^\s*(톤앤무드|색감·조명|색감|조명)\s*[:：]/.test(l)).map(l => l.trim());
+  if (mood.length) parts.push('작품 분위기: ' + mood.join(' / '));
   parts.push(`장소: ${scene.place || scene.heading}${scene.time ? ' / ' + scene.time : ''}${night && !/밤|저녁|새벽/.test(scene.time) ? ' (밤)' : ''}`);
   if (meta.setTable?.trim()) parts.push('씬 설정 (모든 컷에서 똑같이 유지):\n' + meta.setTable.trim());
   else {
@@ -183,7 +185,57 @@ function charList(p: Project, lines: { text: string }[]): string[] {
 }
 /** 작품 설정 (있으면 모든 요청에) */
 function bibleBlock(p: Project): string[] {
-  return p.bible?.trim() ? ['', '[작품 설정 (시나리오 전체에서 정리한 것, 꼭 지켜)]', p.bible.trim()] : [];
+  const out: string[] = [];
+  if (p.debate?.trim()) out.push('', '[3인 토론 결론 (감독·작가·평론가가 합의한 해석과 연출 방향. 인물 성격·행동, 톤앤무드, 카메라 언어를 이대로 따라)]', p.debate.trim());
+  if (p.bible?.trim()) out.push('', '[작품 설정 (시나리오 전체에서 정리한 것, 꼭 지켜)]', p.bible.trim());
+  return out;
+}
+
+// -------- 감독·작가·평론가 3인 토론 --------
+export function buildDebateRequest(p: Project): string {
+  const n = getScenes(p.lines).length;
+  return [
+    `첨부한 시나리오 파일 "${scriptFileName(p)}"(씬 ${n}개, 내가 쓴 작품)을 끝까지 읽고, 아래 세 사람이 이 시나리오를 영화로 만들기 전에 깊이 있게 토론하는 자리를 실제 대화로 써 줘.`,
+    '',
+    '[참석자]',
+    '- 감독: 이 영화를 직접 찍을 사람. 화면, 배우의 동작, 카메라와 편집으로 생각한다. 구체적인 컷과 앵글로 말한다.',
+    '- 작가: 이 시나리오를 쓴 사람. 인물의 속마음, 숨은 동기, 장면의 의도와 복선을 안다. 원작 의도가 흐려지면 반대한다.',
+    '- 평론가: 관객과 비평의 눈. 상투적인 해석, 개연성 구멍, 톤이 흔들리는 곳을 날카롭게 지적하고 더 좋은 대안을 낸다.',
+    '',
+    '[토론 방식]',
+    '- "감독:", "작가:", "평론가:"로 시작하는 대화로. 서로 묻고 반박하고, 쉽게 동의하지 말고 근거(대본의 씬 번호와 장면)를 대며 다퉈. 마지막엔 합의해.',
+    '- 일반론 말고 이 시나리오의 구체적인 씬, 대사, 행동을 짚어서 말해.',
+    '- 아래 순서로 한 부씩 깊게. 한 번에 1~2부만 쓰고, 내가 "다음"이라고 하면 이어서 써.',
+    '  1부. 주제와 이야기 구조: 이 영화가 결국 무슨 이야기인지, 전환점, 결말의 의미, 복선',
+    '  2부. 인물: 인물마다 성격, 욕망과 두려움, 관계, 행동하는 방식과 몸짓·버릇, 말투, 옷차림이 성격을 어떻게 보여 주는지, 씬마다 감정이 어떻게 변하는지',
+    '  3부. 톤앤무드: 장르의 결, 리듬과 속도, 색감, 조명, 날씨·시간대, 소리, 참고할 만한 영화',
+    '  4부. 카메라 언어: 인물별·상황별 앵글과 거리 원칙, 카메라 높이, 움직임, 렌즈, 반복 모티프와 구도, 피해야 할 상투적 촬영',
+    '  5부. 씬별 연출: 중요한 씬마다 핵심 순간, 공개 순서, 꼭 필요한 컷(인서트·리액션·POV 등), 배우 동작과 위치',
+    '- 다 끝나면 맨 마지막에 [토론 결론]을 아래 모양으로 정리해. (이 결론을 그대로 다음 작업에 쓸 거야)',
+    '',
+    '[토론 결론]',
+    '주제: …',
+    '톤앤무드: …',
+    '색감·조명: …',
+    '카메라 언어: …',
+    '인물: 이름 - 성격, 욕망, 행동 방식, 몸짓·버릇, 말투, 옷차림 (한 사람씩 한 줄)',
+    '씬별 연출: S#번호 - 핵심 순간과 연출 방법 (중요한 씬마다 한 줄)',
+    '[작품 설정]',
+    '인물별 나이·직업·관계·생김새·소지품, 주요 장소, 차량·소품, 시대·계절 (한 줄씩, 뒤 씬에서 드러나는 것까지)',
+    '',
+    '지금은 1부부터 시작해 줘.',
+  ].join('\n');
+}
+export const DEBATE_NEXT = '다음. 앞과 같은 깊이로 이어서 토론해 줘. 마지막 부까지 끝났으면 [토론 결론]과 [작품 설정]을 정리해 줘.';
+/** 토론 답 → 결론 */
+export function parseDebate(text: string): string | undefined {
+  const t = unescapeMd(text.replace(/\r/g, ''));
+  const i = t.search(/\[\s*토론\s*결론\s*\]/);
+  if (i < 0) return undefined;
+  const body = t.slice(i).replace(/^\[\s*토론\s*결론\s*\][^\n]*\n?/, '');
+  const end = body.search(/^\s*\**\[\s*작품\s*설정\s*\]/m);
+  const r = (end >= 0 ? body.slice(0, end) : body).replace(/\*\*/g, '').trim();
+  return r || undefined;
 }
 /** 다른 씬들의 흐름: 씬 제목과 첫 지문 */
 export function sceneOutline(p: Project, current?: number): string[] {

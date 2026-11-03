@@ -47,6 +47,8 @@ export interface Project {
   scenes: Record<string, SceneMeta>;
   cuts: Record<string, CutMeta>;
   sbFormat?: string; aspect?: string;
+  debate?: string;    // 감독·작가·평론가 3인 토론 결론 (모든 AI 요청에 같이 보냄)
+  debateLog?: string; // 토론 전체 기록
   bible?: string;     // 작품 설정 (시나리오 전체에서 AI가 정리한 인물·장소·소품·시대, 모든 AI 요청에 같이 보냄)
   createdAt: number; updatedAt: number;
 }

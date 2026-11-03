@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 import type { WsProps } from './Workspace';
 import type { Project } from './types';
 import { applyAiCuts, autoSummary, cutValues, estimatePages, getCuts, getScenes, isAiScene, knownNames, mergeCuts, resetBreaks, sceneStats, splitAt, type Cut, type Scene } from './script';
-import { buildCutSplitRequest, buildFullCutSplitRequest, fullScriptText, buildNextRequest, parseBible, parseCutSplitAnswer, parseSetTables, resolveNumbers, scriptFileName } from './prompts';
+import { buildDebateRequest, DEBATE_NEXT, parseDebate, buildCutSplitRequest, buildFullCutSplitRequest, fullScriptText, buildNextRequest, parseBible, parseCutSplitAnswer, parseSetTables, resolveNumbers, scriptFileName } from './prompts';
 import { copyText } from './util';
 import type { AICut } from './types';
 import { ANGLES, MOVES, SHOT_SIZES, termLabel } from './shots';
@@ -19,6 +19,7 @@ export default function SceneListTab({ p, update, go }: WsProps) {
   const [open, setOpen] = useState<Set<string>>(new Set());
   const [filter, setFilter] = useState('');
   const [allAi, setAllAi] = useState(false);
+  const [debate, setDebate] = useState(false);
   const toggle = (id: string) => setOpen(o => { const n = new Set(o); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const setMeta = (sid: string, k: 'summary' | 'notes', v: string) => update(x => ({ ...x, scenes: { ...x.scenes, [sid]: { ...x.scenes[sid], [k]: v } } }));
 
@@ -34,7 +35,8 @@ export default function SceneListTab({ p, update, go }: WsProps) {
         <button onClick={() => setOpen(new Set(scenes.map(s => s.id)))}>모두 펼치기</button>
         <button onClick={() => setOpen(new Set())}>모두 접기</button>
         <div className="grow" />
-        <button className="primary" onClick={() => setAllAi(true)}>AI로 전체 컷 나누기</button>
+        <button className={p.debate ? '' : 'accent'} onClick={() => setDebate(true)} title="감독·작가·평론가가 먼저 시나리오를 토론하고, 그 결론으로 컷 나누기와 장면 묘사를 해요">① 3인 토론{p.debate ? ' ✓' : ''}</button>
+        <button className="primary" onClick={() => setAllAi(true)}>② AI로 전체 컷 나누기</button>
         <button onClick={exportScenes}>신 리스트 CSV</button>
         <button onClick={exportCuts}>컷 리스트 CSV</button>
         <button className="primary" onClick={() => go('board')}>스토리보드로 →</button>
@@ -65,6 +67,7 @@ export default function SceneListTab({ p, update, go }: WsProps) {
           })}
         </tbody>
       </table>
+      {debate && <DebateModal p={p} update={update} onClose={() => setDebate(false)} onNext={() => { setDebate(false); setAllAi(true); }} />}
       {allAi && <AiSplitModal p={p} scenes={scenes} names={names} onBible={t => update(x => ({ ...x, bible: t }))} onClose={() => setAllAi(false)} onApply={g => update(x => g.reduce((acc, [sc, list, st, keep]) => applyAiCuts(acc, sc, list, undefined, st, keep), x))} />}
     </div></div>
   );
@@ -169,6 +172,52 @@ export function CharPick({ all, value, manual, onClose, onSave, label }: { all: 
       <div className="grow" />
       {manual && <button onClick={() => { onSave(undefined); onClose(); }}>자동으로 되돌리기</button>}
       <button className="primary" onClick={() => { onSave(sel); onClose(); }}>저장</button>
+    </div>
+  </Modal>;
+}
+
+/** 감독·작가·평론가 3인 토론 → 결론을 모든 AI 요청에 */
+function DebateModal({ p, update, onClose, onNext }: { p: Project; update: WsProps['update']; onClose: () => void; onNext: () => void }) {
+  const toast = useToast();
+  const [text, setText] = useState('');
+  const scenes = useMemo(() => getScenes(p.lines), [p.lines]);
+  const rounds = (p.debateLog || '').split('\n\n━━━━━━━━\n\n').filter(Boolean).length;
+  const copy = async (t: string) => toast(await copyText(t) ? '복사했어요. AI 대화창에 붙여 넣으세요.' : '복사하지 못했어요.');
+  const add = () => {
+    const t = text.trim(); if (!t) return;
+    const log = [p.debateLog, t].filter(Boolean).join('\n\n━━━━━━━━\n\n');
+    const concl = parseDebate(t); const bible = parseBible(t);
+    update(x => ({ ...x, debateLog: log, ...(concl ? { debate: concl } : {}), ...(bible ? { bible } : {}) }));
+    setText('');
+    toast(concl ? '토론 결론을 저장했어요. 이제 컷 나누기와 장면 묘사에 이 결론이 같이 가요.' : `토론 ${rounds + 1}번째 답을 모았어요. "다음" 요청을 복사해 이어 받으세요.`);
+  };
+  const paste = async () => { try { const t = await navigator.clipboard.readText(); if (t) setText(t); } catch { toast('아래 칸을 길게 눌러 붙여넣기 해 주세요.'); } };
+  return <Modal wide title="① 3인 토론: 감독 · 작가 · 평론가" onClose={onClose}>
+    <div style={{ display: 'grid', gap: 10 }}>
+      <p className="muted small-t" style={{ margin: 0 }}>장면 묘사 전에 외부 AI가 <b>영화감독, 시나리오 작가, 평론가</b> 세 사람이 되어 시나리오를 깊이 토론해요(주제와 구조 → 인물 성격·행동 → 톤앤무드 → 카메라 언어 → 씬별 연출). 마지막 <b>[토론 결론]</b>이 저장되면 컷 나누기, 장면 묘사, 그림 프롬프트에 모두 같이 들어가요.</p>
+      <div className="row">
+        <b>1.</b> <button onClick={async () => { try { await saveFile(new Blob([fullScriptText(p, scenes)], { type: 'text/plain' }), scriptFileName(p)); } catch (e: any) { toast('파일 저장 실패: ' + (e?.message || e)); } }}>시나리오 파일 보내기</button>
+        <span className="muted small-t">→ AI 대화창에 첨부해요</span>
+      </div>
+      <div className="row">
+        <b>2.</b> <button className="primary" onClick={() => copy(buildDebateRequest(p))}>토론 요청 복사</button>
+        <button onClick={() => copy(DEBATE_NEXT)}>"다음" 요청 복사</button>
+        <button onClick={() => openAiSide()}>AI 옆 화면에 열기 ◫</button>
+        <span className="muted small-t">→ 한 번에 1~2부씩 답해요. 끝까지 "다음"으로 이어 받아요</span>
+      </div>
+      <div className="row"><b>3.</b> <button onClick={paste}>AI 답 붙여넣기</button><span className="muted small-t">받은 답을 매번 붙여 넣고 "모으기"를 눌러요. 결론이 나오면 자동으로 저장돼요</span></div>
+      <textarea value={text} onChange={e => setText(e.target.value)} rows={7} style={{ width: '100%', fontSize: 14 }} placeholder={'감독: …\n작가: …\n평론가: …'} />
+      <div className="row" style={{ justifyContent: 'flex-end' }}>
+        {rounds > 0 && <span className="muted small-t">모은 답 {rounds}개</span>}
+        {rounds > 0 && <button className="small danger" onClick={() => { if (confirm('토론 기록과 결론을 지울까요?')) update(x => ({ ...x, debateLog: undefined, debate: undefined })); }}>처음부터 다시</button>}
+        <button className="primary" disabled={!text.trim()} onClick={add}>모으기</button>
+      </div>
+      <div className="row small-t"><b>토론 결론</b><span className="muted">{p.debate ? '고칠 수 있어요. 모든 AI 요청에 같이 보내요.' : '아직 없어요. 마지막 답의 [토론 결론]이 여기 들어와요.'}</span></div>
+      <LazyText value={p.debate || ''} rows={10} placeholder={'주제: …\n톤앤무드: …\n색감·조명: …\n카메라 언어: …\n인물: 이름 - 성격, 욕망, 행동 방식 …\n씬별 연출: S#1 - …'} onSave={v => update(x => ({ ...x, debate: v.trim() || undefined }))} />
+      {p.debateLog && <details><summary className="small-t">토론 전체 기록 보기</summary><pre style={{ whiteSpace: 'pre-wrap', fontSize: 13, maxHeight: 400, overflow: 'auto', background: 'var(--soft)', padding: 10, borderRadius: 8 }}>{p.debateLog}</pre></details>}
+      <div className="row" style={{ justifyContent: 'flex-end' }}>
+        <button className="primary" disabled={!p.debate} onClick={onNext}>② 이 결론으로 컷 나누기 →</button>
+      </div>
     </div>
   </Modal>;
 }
