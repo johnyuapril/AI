@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 import type { WsProps } from './Workspace';
 import type { Project } from './types';
 import { applyAiCuts, autoSummary, cutValues, estimatePages, getCuts, getScenes, isAiScene, knownNames, mergeCuts, resetBreaks, sceneStats, splitAt, type Cut, type Scene } from './script';
-import { buildDebateRequest, buildDebateSummaryRequest, DEBATE_NEXT, parseDebate, buildCutSplitRequest, buildFullCutSplitRequest, fullScriptText, buildNextRequest, parseBible, parseCutSplitAnswer, parseSetTables, resolveNumbers, scriptFileName } from './prompts';
+import { buildCharSheetRequest, buildDebateRequest, buildDebateSummaryRequest, DEBATE_NEXT, parseDebate, buildCutSplitRequest, buildFullCutSplitRequest, fullScriptText, buildNextRequest, parseBible, parseCutSplitAnswer, parseSetTables, resolveNumbers, scriptFileName } from './prompts';
 import { copyText } from './util';
 import type { AICut } from './types';
 import { ANGLES, MOVES, SHOT_SIZES, termLabel } from './shots';
@@ -192,6 +192,14 @@ function DebateModal({ p, update, onClose, onNext }: { p: Project; update: WsPro
     toast(concl ? '토론 결론을 저장했어요. 이제 컷 나누기와 장면 묘사에 이 결론이 같이 가요.' : `토론 ${rounds + 1}번째 답을 모았어요. "다음" 요청을 복사해 이어 받으세요.`);
   };
   const paste = async () => { try { const t = await navigator.clipboard.readText(); if (t) setText(t); } catch { toast('아래 칸을 길게 눌러 붙여넣기 해 주세요.'); } };
+  // 대사 많은 순서로 인물
+  const people = useMemo(() => {
+    const cnt = new Map<string, number>();
+    for (const l of p.lines) if (l.t === 'character') { const n = l.text.replace(/\s*\(.*?\)\s*/g, '').trim(); if (n) cnt.set(n, (cnt.get(n) || 0) + 1); }
+    for (const c of p.chars) if (!cnt.has(c.name)) cnt.set(c.name, 0);
+    return [...cnt.entries()].sort((a, b) => b[1] - a[1]).map(e => e[0]);
+  }, [p.lines, p.chars]);
+  const [showAll, setShowAll] = useState(false);
   return <Modal wide title="① 3인 토론: 감독 · 작가 · 평론가" onClose={onClose}>
     <div style={{ display: 'grid', gap: 10 }}>
       <p className="muted small-t" style={{ margin: 0 }}>장면 묘사 전에 외부 AI가 <b>영화감독, 시나리오 작가, 평론가</b> 세 사람이 되어, 시나리오를 고치지 않고 <b>어떻게 이해하고 화면으로 그려 낼지</b> 깊이 토론해요(시나리오 읽기 → 인물 그려 내기 → 감정과 표정·행동 → 공간과 화면 → 씬별 화면과 카메라). 마지막 <b>[토론 결론]</b>이 저장되면 컷 나누기, 장면 묘사, 그림 프롬프트에 모두 같이 들어가요.</p>
@@ -213,6 +221,13 @@ function DebateModal({ p, update, onClose, onNext }: { p: Project; update: WsPro
         {rounds > 0 && <button className="small danger" onClick={() => { if (confirm('토론 기록과 결론을 지울까요?')) update(x => ({ ...x, debateLog: undefined, debate: undefined })); }}>처음부터 다시</button>}
         <button className="primary" disabled={!text.trim()} onClick={add}>모으기</button>
       </div>
+      {rounds > 0 && <div className="box-b" style={{ background: 'var(--soft)', borderRadius: 8, padding: 8 }}>
+        <div className="row small-t"><b>캐릭터 시트</b><span className="muted">토론 2부(인물 그려 내기)가 끝나면, 같은 대화창에 붙여 넣어요. AI가 2부 내용을 정리한 뒤 그대로 마커펜 스토리보드풍 캐릭터 시트를 그려요. 한 번에 한 사람씩.</span></div>
+        <div className="row" style={{ flexWrap: 'wrap', marginTop: 6 }}>
+          {(showAll ? people : people.slice(0, 8)).map(n => <button key={n} className="small" onClick={() => copy(buildCharSheetRequest(n, p.chars.find(c => c.name === n)?.look))}>{n} 시트 요청 복사</button>)}
+          {people.length > 8 && <button className="small ghost" onClick={() => setShowAll(!showAll)}>{showAll ? '주요 인물만' : `+${people.length - 8}명 더`}</button>}
+        </div>
+      </div>}
       <div className="row small-t"><b>토론 결론</b><span className="muted">{p.debate ? `${p.debate.length.toLocaleString()}자 · 고칠 수 있어요. 씬마다 그 씬의 인물·장소·[씬] 항목을 골라 같이 보내요.` : '아직 없어요. 마지막 답의 [토론 결론]이 여기 들어와요.'}</span>
         {p.debate && p.debate.length < 1500 && <span style={{ color: 'var(--accent)' }}>결론이 짧아요. "결론 자세히 다시 받기"를 눌러 보세요.</span>}</div>
       <LazyText value={p.debate || ''} rows={10} placeholder={'이야기의 핵심: …\n톤앤무드: …\n색감·조명: …\n카메라 언어: …\n인물: 이름 - 생김새, 몸짓, 표정 …\n공간: …\n씬별 화면: S#1 - …'} onSave={v => update(x => ({ ...x, debate: v.trim() || undefined }))} />
