@@ -11,6 +11,8 @@ export interface ComfySettings {
   style: string;        // 영어 그림체 문구 (모든 컷 앞에)
   neg: string;          // 빼고 싶은 것 (네거티브)
   w: number; h: number; steps: number; cfg: number;
+  exe?: string;         // 윈도우: ComfyUI 실행 파일 (없으면 흔한 위치에서 찾음)
+  autoStart?: boolean;  // 윈도우 앱을 켜면 ComfyUI도 켜기 (기본 켬)
 }
 export const DEFAULT_COMFY: ComfySettings = {
   url: 'http://127.0.0.1:8188',
@@ -149,4 +151,49 @@ export async function comfyDraw(c: ComfySettings, prompt: string, opt: { ref?: B
     return new Blob([v.data], { type: v.type || 'image/png' });
   }
   throw new Error('15분이 지나도 그림이 안 나와서 멈췄어요.');
+}
+
+
+/** 켜져 있는 주소 찾기 (설정 주소, 데스크톱 8000, 포터블 8188) */
+export async function comfyFindRunning(c: ComfySettings): Promise<string | null> {
+  const urls = [...new Set([base(c), 'http://127.0.0.1:8000', 'http://127.0.0.1:8188'])];
+  for (const url of urls) {
+    try { const r = await req(url + '/system_stats'); if (r.status < 400) return url; } catch { /* 꺼져 있음 */ }
+  }
+  return null;
+}
+export let comfyStartNote = '';
+/** 윈도우 앱을 켤 때: ComfyUI가 꺼져 있으면 켜기. 찾은 실행 파일 경로를 돌려줌 */
+export async function comfyAutoStart(c: ComfySettings): Promise<{ running?: string; launched?: string; notFound?: boolean }> {
+  if (!desktop?.comfyLaunch) return {};
+  const running = await comfyFindRunning(c);
+  if (running) { comfyStartNote = 'ComfyUI가 이미 켜져 있어요.'; return { running }; }
+  const r = await desktop.comfyLaunch(c.exe);
+  if (!r.ok) { comfyStartNote = 'ComfyUI 실행 파일을 찾지 못했어요. "ComfyUI 위치 고르기"로 알려 주세요.'; return { notFound: true }; }
+  comfyStartNote = `ComfyUI를 켰어요 (${r.path}). 완전히 뜰 때까지 30초~1분 걸려요.`;
+  return { launched: r.path };
+}
+
+
+/** 기본으로 받을 모델: SDXL 공식 (6.9GB, 10GB 그래픽카드에서 잘 돎) */
+export const SDXL_MODEL = { name: 'sd_xl_base_1.0.safetensors', url: 'https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0/resolve/main/sd_xl_base_1.0.safetensors', size: '6.9GB' };
+/** 체크포인트 목록에서 콘티용으로 쓸 만한 것 고르기 (SDXL 계열 우선, refiner·인페인트 빼기) */
+export function pickCheckpoint(list: string[]): string | undefined {
+  const ok = list.filter(n => !/refiner|inpaint|vae|upscale/i.test(n));
+  const score = (n: string) => (/juggernaut/i.test(n) ? 5 : 0) + (/xl|sdxl/i.test(n) ? 3 : 0) + (/flux|sd3|svd|video|wan|ltx|hunyuan/i.test(n) ? -10 : 0) + (/1[._-]?5|sd15/i.test(n) ? -2 : 0);
+  return [...ok].sort((a, b) => score(b) - score(a))[0];
+}
+/** ComfyUI가 뜰 때까지 기다렸다가 주소·모델을 알아서 맞추기 */
+export async function comfyAutoSetup(c: ComfySettings, waitMs = 180_000, onNote?: (s: string) => void): Promise<Partial<ComfySettings> | null> {
+  const t0 = Date.now(); let url: string | null = null;
+  while (!(url = await comfyFindRunning(c)) && Date.now() - t0 < waitMs) { onNote?.(`ComfyUI 켜지는 중… ${Math.round((Date.now() - t0) / 1000)}초`); await sleep(3000); }
+  if (!url) return null;
+  const cc = { ...c, url };
+  const list = await comfyCheckpoints(cc).catch(() => [] as string[]);
+  const patch: Partial<ComfySettings> = {};
+  if (url !== c.url) patch.url = url;
+  if (!c.ckpt || !list.includes(c.ckpt)) { const best = pickCheckpoint(list); if (best) patch.ckpt = best; }
+  comfyStartNote = list.length ? `ComfyUI 준비됐어요. 모델: ${patch.ckpt || c.ckpt}` : 'ComfyUI는 켜졌는데 그림 모델이 없어요. "SDXL 모델 받기"를 눌러 주세요.';
+  onNote?.(comfyStartNote);
+  return patch;
 }

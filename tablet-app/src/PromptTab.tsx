@@ -11,8 +11,8 @@ import { getImageBlob } from './store';
 import { DEFAULT_STYLE } from './store';
 import type { Settings } from './types';
 import { cutValues } from './script';
-import { comfyCheck, comfyCheckpoints, comfyDraw, DEFAULT_COMFY, type ComfySettings } from './comfy';
-import { isDesktop } from './native';
+import { comfyAutoSetup, comfyAutoStart, pickCheckpoint, SDXL_MODEL, comfyCheck, comfyCheckpoints, comfyDraw, comfyStartNote, DEFAULT_COMFY, type ComfySettings } from './comfy';
+import { desktop, isDesktop } from './native';
 
 const comfyOf = (s: Settings): ComfySettings => ({ ...DEFAULT_COMFY, ...(s.comfy || {}) });
 /** 컷 하나를 ComfyUI로 그려서 컷에 넣기 */
@@ -216,10 +216,19 @@ function CutPromptRow({ p, settings, scene, cut, prev, onCopy, setCut, onBig }: 
 function ComfyPanel({ p, update, settings, setSettings, onBig }: { p: Project; update: WsProps['update']; settings: Settings; setSettings: (s: Settings) => void; onBig: (id: string) => void }) {
   const toast = useToast();
   const c = comfyOf(settings);
-  const [open, setOpen] = useState(!!settings.comfy);
+  const [open, setOpen] = useState(!!settings.comfy && !settings.comfy.ckpt);
+  React.useEffect(() => { if (comfyStartNote) setStatus(comfyStartNote); }, []);
   const [status, setStatus] = useState('');
   const [ckpts, setCkpts] = useState<string[]>([]);
   const set = (patch: Partial<ComfySettings>) => setSettings({ ...settings, comfy: { ...c, ...patch } });
+  const [dl, setDl] = useState('');
+  React.useEffect(() => { desktop?.onComfyDl?.(x => setDl(x.done ? '' : `받는 중 ${Math.round(x.got / 1048576)}MB${x.total ? ` / ${Math.round(x.total / 1048576)}MB` : ''}`)); }, []);
+  const getModel = async () => {
+    if (!confirm(`SDXL 모델(${SDXL_MODEL.size})을 받을까요? 인터넷 속도에 따라 몇 분~수십 분 걸려요.`)) return;
+    setDl('받기 시작…');
+    try { await desktop!.comfyGetModel!(c.exe, SDXL_MODEL.url, SDXL_MODEL.name); setDl(''); set({ ckpt: SDXL_MODEL.name }); toast('SDXL 모델을 받았어요. 바로 그릴 수 있어요.'); }
+    catch (e: any) { setDl(''); toast(String(e?.message || e)); }
+  };
   const check = async () => {
     setStatus('연결하는 중…');
     // ComfyUI 데스크톱 앱은 8000, 직접 설치(포터블)는 8188 포트를 써서 둘 다 시도
@@ -227,9 +236,10 @@ function ComfyPanel({ p, update, settings, setSettings, onBig }: { p: Project; u
     let err = '';
     for (const url of urls) {
       try {
-        const cc = { ...c, url }; const msg = await comfyCheck(cc); const list = await comfyCheckpoints(cc).catch(() => []);
+        const cc = { ...c, url }; const msg = await comfyCheck(cc); const list: string[] = await comfyCheckpoints(cc).catch(() => []);
         setCkpts(list); setStatus(msg + (list.length ? ` · 모델 ${list.length}개` : ' · 모델(체크포인트)이 없어요'));
-        set({ url, ...(!c.ckpt && list[0] ? { ckpt: list[0] } : {}) }); return;
+        const best = pickCheckpoint(list);
+        set({ url, ...((!c.ckpt || !list.includes(c.ckpt)) && best ? { ckpt: best } : {}) }); return;
       } catch (e: any) { if (!err) err = String(e?.message || e); }
     }
     setStatus(err);
@@ -265,6 +275,13 @@ function ComfyPanel({ p, update, settings, setSettings, onBig }: { p: Project; u
         <button className="primary" onClick={check}>연결 확인</button>
         <span className="small-t">{status}</span>
       </div>
+      {isDesktop() && <div className="row small-t">
+        <label className="row" style={{ gap: 4 }}><input type="checkbox" checked={c.autoStart !== false} onChange={e => set({ autoStart: e.target.checked })} /> 이 앱을 켜면 ComfyUI도 같이 켜기</label>
+        <button className="small" onClick={async () => { const r = await comfyAutoStart(c); setStatus(comfyStartNote); if (r.notFound) return; const p2 = await comfyAutoSetup(c, 180_000, setStatus); set({ ...(r.launched ? { exe: r.launched } : {}), ...(p2 || {}) }); }}>지금 켜고 맞추기</button>
+        {desktop?.comfyGetModel && <button className="small" disabled={!!dl} onClick={getModel} title={`SDXL 공식 모델 ${SDXL_MODEL.size}를 ComfyUI 모델 폴더에 받아요`}>{dl || `SDXL 모델 받기 (${SDXL_MODEL.size})`}</button>}
+        {desktop?.pickFile && <button className="small" onClick={async () => { const f = await desktop!.pickFile!('ComfyUI 실행 파일 고르기 (ComfyUI.exe 또는 run_nvidia_gpu.bat)', [{ name: 'ComfyUI', extensions: ['exe', 'bat', 'cmd'] }]); if (f) { set({ exe: f }); toast('ComfyUI 위치를 기억했어요.'); } }}>ComfyUI 위치 고르기</button>}
+        <span className="muted">{c.exe ? c.exe : comfyStartNote || '설치 위치는 자동으로 찾아요'}</span>
+      </div>}
       <div className="muted small-t">{isDesktop() ? '이 PC에서 ComfyUI를 켜 두면 기본 주소 그대로 돼요.' : '태블릿에서는 PC 주소(예: http://192.168.0.10:8188)를 쓰고, PC의 ComfyUI를 --listen --enable-cors-header 로 켜야 해요.'}</div>
       <div className="row">
         <b>모델</b>

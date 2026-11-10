@@ -115,6 +115,67 @@ ipcMain.handle('desktop:fetchBin', async (_e, { url, method, headers, body }) =>
   const r = await fetch(url, { method: method || 'GET', headers: headers || {}, body: body == null ? undefined : (typeof body === 'string' ? body : Buffer.from(body)) });
   return { status: r.status, type: r.headers.get('content-type') || '', data: new Uint8Array(await r.arrayBuffer()) };
 });
+// ComfyUI 켜기: 지정한 파일이 없으면 흔한 설치 위치에서 찾는다 (ComfyUI Desktop, 포터블)
+function comfyCandidates() {
+  const la = process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local');
+  const pf = [process.env.ProgramFiles, process.env['ProgramFiles(x86)']].filter(Boolean);
+  const list = [
+    path.join(la, 'Programs', '@comfyorgcomfyui-electron', 'ComfyUI.exe'),
+    path.join(la, 'Programs', 'ComfyUI', 'ComfyUI.exe'),
+    path.join(la, 'Programs', 'comfyui-electron', 'ComfyUI.exe'),
+    ...pf.map(d => path.join(d, 'ComfyUI', 'ComfyUI.exe')),
+  ];
+  // 포터블: 드라이브 바로 아래나 내 폴더, 다운로드, 바탕화면
+  const roots = ['C:\\', 'D:\\', 'E:\\', os.homedir(), path.join(os.homedir(), 'Downloads'), path.join(os.homedir(), 'Desktop'), path.join(os.homedir(), 'Documents')];
+  for (const r of roots) for (const d of ['ComfyUI_windows_portable', 'ComfyUI_windows_portable_nvidia', 'ComfyUI']) {
+    list.push(path.join(r, d, 'run_nvidia_gpu.bat'));
+  }
+  return list;
+}
+ipcMain.handle('desktop:comfyLaunch', async (_e, { exe }) => {
+  const found = [exe, ...comfyCandidates()].filter(Boolean).find(p => { try { return fs.statSync(p).isFile(); } catch { return false; } });
+  if (!found) return { ok: false, path: '' };
+  if (/\.(bat|cmd)$/i.test(found)) spawn('cmd.exe', ['/c', 'start', '"ComfyUI"', '/min', found], { cwd: path.dirname(found), detached: true, stdio: 'ignore', windowsHide: true }).unref();
+  else spawn(found, [], { cwd: path.dirname(found), detached: true, stdio: 'ignore' }).unref();
+  return { ok: true, path: found };
+});
+// ComfyUI 모델 폴더 찾기: Desktop 은 %APPDATA%\ComfyUI\config.json 의 basePath, 포터블은 실행 파일 옆
+function comfyModelDir(exe) {
+  const out = [];
+  try {
+    const cfg = JSON.parse(fs.readFileSync(path.join(app.getPath('appData'), 'ComfyUI', 'config.json'), 'utf8'));
+    if (cfg.basePath) out.push(path.join(cfg.basePath, 'models', 'checkpoints'));
+  } catch { /* 없음 */ }
+  if (exe && /\.(bat|cmd)$/i.test(exe)) out.push(path.join(path.dirname(exe), 'ComfyUI', 'models', 'checkpoints'));
+  out.push(path.join(os.homedir(), 'Documents', 'ComfyUI', 'models', 'checkpoints'));
+  return out.find(d => { try { return fs.statSync(d).isDirectory(); } catch { return false; } }) || '';
+}
+// 모델 받기 (수 GB): 다 받은 뒤 이름을 바꿔서, 받다 만 파일을 ComfyUI가 읽지 않게
+ipcMain.handle('desktop:comfyGetModel', async (_e, { exe, url, name }) => {
+  const dir = comfyModelDir(exe);
+  if (!dir) throw new Error('ComfyUI 모델 폴더(models/checkpoints)를 찾지 못했어요.');
+  const dest = path.join(dir, name);
+  if (fs.existsSync(dest)) return dest;
+  const tmp = dest + '.part';
+  const r = await fetch(url, { redirect: 'follow' });
+  if (!r.ok || !r.body) throw new Error('모델 받기 실패: ' + r.status);
+  const total = Number(r.headers.get('content-length')) || 0;
+  const f = fs.createWriteStream(tmp);
+  let got = 0, last = 0;
+  for await (const chunk of r.body) {
+    got += chunk.length;
+    if (!f.write(chunk)) await new Promise(res => f.once('drain', res));
+    if (Date.now() - last > 700) { last = Date.now(); main?.webContents.send('comfy-dl', { got, total }); }
+  }
+  await new Promise(res => f.end(res));
+  fs.renameSync(tmp, dest);
+  main?.webContents.send('comfy-dl', { got, total, done: true });
+  return dest;
+});
+ipcMain.handle('desktop:pickFile', async (_e, { title, filters }) => {
+  const r = await dialog.showOpenDialog(main, { title, properties: ['openFile'], filters });
+  return r.canceled ? '' : r.filePaths[0] || '';
+});
 // 업데이트: 새 설치 파일을 받아 실행하고 앱을 닫는다 (설치가 끝나면 다시 켜짐)
 ipcMain.handle('desktop:installUpdate', async (_e, { url }) => {
   const p = path.join(os.tmpdir(), 'Screenwriter-Setup.exe');

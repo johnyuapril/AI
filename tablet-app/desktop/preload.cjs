@@ -11,6 +11,10 @@ contextBridge.exposeInMainWorld('desktop', {
   showItem: p => call('showItem', { path: p }),
   http: o => call('http', o),
   fetchBin: o => call('fetchBin', o),
+  comfyLaunch: exe => call('comfyLaunch', { exe }),
+  pickFile: (title, filters) => call('pickFile', { title, filters }),
+  comfyGetModel: (exe, url, name) => call('comfyGetModel', { exe, url, name }),
+  onComfyDl: cb => ipcRenderer.on('comfy-dl', (_e, p) => cb(p)),
   installUpdate: url => call('installUpdate', { url }),
   onAiDownloaded: cb => ipcRenderer.on('ai-downloaded', (_e, p) => cb(p)),
 });

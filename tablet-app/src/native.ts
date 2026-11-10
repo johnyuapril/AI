@@ -15,6 +15,10 @@ export interface DesktopBridge {
   showItem(path: string): Promise<void>;
   http(o: { url: string; method: string; headers: Record<string, string>; body: string }): Promise<{ status: number; text: string }>;
   installUpdate(url: string): Promise<void>;
+  comfyLaunch?(exe?: string): Promise<{ ok: boolean; path: string }>;
+  pickFile?(title: string, filters: { name: string; extensions: string[] }[]): Promise<string>;
+  comfyGetModel?(exe: string | undefined, url: string, name: string): Promise<string>;
+  onComfyDl?(cb: (p: { got: number; total: number; done?: boolean }) => void): void;
   /** 예전 윈도우 앱에는 없을 수 있음 */
   fetchBin?(o: { url: string; method?: string; headers?: Record<string, string>; body?: Uint8Array | string }): Promise<{ status: number; type: string; data: Uint8Array }>;
   onAiDownloaded(cb: (path: string) => void): void;
