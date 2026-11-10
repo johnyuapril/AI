@@ -2,7 +2,7 @@ export type LineType = 'scene' | 'action' | 'character' | 'dialogue' | 'paren' |
 export interface Line { id: string; t: LineType; text: string; m?: 1 }
 export type Format = 'ko-stack' | 'ko-side' | 'hollywood';
 
-export interface CharInfo { name: string; memo: string; look: string }
+export interface CharInfo { name: string; memo: string; look: string; sheet?: string /* 캐릭터 시트 그림 id */ }
 
 export interface CutMeta {
   shot?: string; angle?: string; move?: string;
@@ -14,6 +14,7 @@ export interface CutMeta {
   img?: string;       // 이미지 id
   ctx?: string; audio?: string; time?: string; // 스토리보드 칸 직접 고친 값
   wait?: boolean;     // 그림 기다리는 중
+  en?: string;        // ComfyUI용 영어 그림 프롬프트
   wt?: WebtoonPanel;  // 웹툰 칸 직접 고친 값 (없으면 자동)
 }
 export type BubbleKind = 'talk' | 'shout' | 'think' | 'off' | 'nar';
@@ -54,4 +55,4 @@ export interface Project {
 }
 export interface ProjectSummary { id: string; title: string; updatedAt: number; sceneCount: number; lineCount: number }
 export interface GSync { url: string; key: string; auto: boolean }
-export interface Settings { gptInstruction: string; styleText: string; styleImg?: string; promptHeader: string; gsync?: GSync }
+export interface Settings { gptInstruction: string; styleText: string; styleImg?: string; promptHeader: string; gsync?: GSync; comfy?: import('./comfy').ComfySettings }

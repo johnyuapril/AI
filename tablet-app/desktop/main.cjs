@@ -109,6 +109,12 @@ ipcMain.handle('desktop:http', async (_e, { url, method, headers, body }) => {
   const r = await net.fetch(url, { method, headers, body, redirect: 'follow' });
   return { status: r.status, text: await r.text() };
 });
+// ComfyUI(내 PC 그림 AI)와 주고받기: 그림 같은 바이너리도 오가고, 브라우저 제한(CORS)이 없게 앱 안에서
+ipcMain.handle('desktop:fetchBin', async (_e, { url, method, headers, body }) => {
+  if (!/^https?:\/\//i.test(url)) throw new Error('잘못된 주소');
+  const r = await fetch(url, { method: method || 'GET', headers: headers || {}, body: body == null ? undefined : (typeof body === 'string' ? body : Buffer.from(body)) });
+  return { status: r.status, type: r.headers.get('content-type') || '', data: new Uint8Array(await r.arrayBuffer()) };
+});
 // 업데이트: 새 설치 파일을 받아 실행하고 앱을 닫는다 (설치가 끝나면 다시 켜짐)
 ipcMain.handle('desktop:installUpdate', async (_e, { url }) => {
   const p = path.join(os.tmpdir(), 'Screenwriter-Setup.exe');

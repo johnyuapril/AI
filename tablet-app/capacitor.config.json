@@ -2,5 +2,5 @@
   "appId": "com.johnyuapril.screenwriter",
   "appName": "시나리오 작업실",
   "webDir": "dist",
-  "android": { "allowMixedContent": false }
+  "android": { "allowMixedContent": true }
 }

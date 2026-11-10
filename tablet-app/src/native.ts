@@ -15,6 +15,8 @@ export interface DesktopBridge {
   showItem(path: string): Promise<void>;
   http(o: { url: string; method: string; headers: Record<string, string>; body: string }): Promise<{ status: number; text: string }>;
   installUpdate(url: string): Promise<void>;
+  /** 예전 윈도우 앱에는 없을 수 있음 */
+  fetchBin?(o: { url: string; method?: string; headers?: Record<string, string>; body?: Uint8Array | string }): Promise<{ status: number; type: string; data: Uint8Array }>;
   onAiDownloaded(cb: (path: string) => void): void;
 }
 export const desktop: DesktopBridge | undefined = (globalThis as any).desktop;

@@ -554,3 +554,37 @@ function parseDlg(v: string): { speaker: string; text: string; off: boolean }[] 
   if (!m) return [{ speaker: '', text: v, off: false }];
   return [{ speaker: m[1].trim(), text: m[4].trim(), off: !!m[2] || /소리/.test(m[1]) }];
 }
+
+
+// -------- ComfyUI용 영어 프롬프트 (외부 AI에게 번역·정리 받기) --------
+export function buildEnRequest(p: Project, scene: Scene, cuts: Cut[]): string {
+  const looks = p.chars.filter(ch => ch.look.trim() && scene.lines.some(l => l.text.includes(ch.name))).map(ch => `${ch.name}: ${ch.look.trim()}`);
+  const parts = [
+    '아래 스토리보드 컷들을 그림 AI(Stable Diffusion/Flux)에 넣을 영어 프롬프트로 바꿔 줘.',
+    '- 컷마다 영어 한 단락(40~90단어). 쉼표로 이어진 묘사 문장으로.',
+    '- 순서: 샷 크기와 앵글(예: extreme wide shot, low angle) → 장소 → 인물(이름 대신 나이·성별·생김새·옷차림으로, 같은 인물은 모든 컷에서 똑같은 말로) → 자세·동작·표정·시선 → 빛과 시간대.',
+    '- 그림체, 색, 화질 단어는 쓰지 마 (앱이 따로 붙여). 글자·말풍선·대사도 넣지 마.',
+    '- 화면에 사람이 없으면 "no people"을 넣어.',
+    '- 한 컷 = 한 장면 한 순간. 여러 칸이나 여러 장면을 섞지 마.',
+    '',
+  ];
+  if (looks.length) parts.push('[인물 외모]', ...looks, '');
+  const st = p.scenes[scene.id]?.setTable?.trim();
+  if (st) parts.push('[씬 설정표]', st, '');
+  parts.push(`[씬] S#${scene.num}. ${scene.heading}`, '');
+  cuts.forEach((c, i) => parts.push(cutPromptFor(p, scene, c, cuts[i - 1]).split('\n').filter(l => !l.startsWith('⚠')).join('\n'), ''));
+  parts.push('[답하는 형식] 다른 말 없이 컷마다 한 줄씩:', `[${cuts[0]?.label || scene.num + '-1'}] extreme wide shot, …`, `[${cuts[1]?.label || scene.num + '-2'}] …`);
+  return parts.join('\n');
+}
+/** "[1-2] english…" → { '1-2': 'english…' } */
+export function parseEnAnswer(text: string): Record<string, string> {
+  const out: Record<string, string> = {}; let cur = '';
+  for (const raw of unescapeMd(text.replace(/\r/g, '')).split('\n')) {
+    const l = raw.replace(/\*\*|__|`/g, '').trim();
+    const m = l.match(/^[-*•]?\s*\[?\s*(?:컷\s*)?S?#?\s*(\d+)\s*-\s*(\d+)\s*\]?\s*[.:)\]]?\s*(.*)$/);
+    if (m) { cur = `${+m[1]}-${+m[2]}`; out[cur] = m[3].trim(); continue; }
+    if (cur && l) out[cur] = (out[cur] + ' ' + l).trim();
+  }
+  for (const k of Object.keys(out)) if (!out[k]) delete out[k];
+  return out;
+}

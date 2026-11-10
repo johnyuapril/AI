@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld('desktop', {
   openExternal: url => call('openExternal', { url }),
   showItem: p => call('showItem', { path: p }),
   http: o => call('http', o),
+  fetchBin: o => call('fetchBin', o),
   installUpdate: url => call('installUpdate', { url }),
   onAiDownloaded: cb => ipcRenderer.on('ai-downloaded', (_e, p) => cb(p)),
 });
