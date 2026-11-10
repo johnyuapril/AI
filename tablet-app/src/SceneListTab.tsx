@@ -202,7 +202,7 @@ function DebateModal({ p, update, onClose, onNext }: { p: Project; update: WsPro
   const [showAll, setShowAll] = useState(false);
   return <Modal wide title="① 3인 토론: 감독 · 작가 · 평론가" onClose={onClose}>
     <div style={{ display: 'grid', gap: 10 }}>
-      <p className="muted small-t" style={{ margin: 0 }}>장면 묘사 전에 외부 AI가 <b>영화감독, 시나리오 작가, 평론가</b> 세 사람이 되어, 시나리오를 고치지 않고 <b>어떻게 이해하고 화면으로 그려 낼지</b> 깊이 토론해요(시나리오 읽기 → 인물 그려 내기 → 감정과 표정·행동 → 공간과 화면 → 씬별 화면과 카메라). 마지막 <b>[토론 결론]</b>이 저장되면 컷 나누기, 장면 묘사, 그림 프롬프트에 모두 같이 들어가요.</p>
+      <p className="muted small-t" style={{ margin: 0 }}>장면 묘사 전에 외부 AI가 <b>영화감독, 시나리오 작가, 평론가</b> 세 사람이 되어, 시나리오를 고치지 않고 <b>어떻게 이해하고 화면으로 그려 낼지</b> 깊이 토론해요(시나리오 읽기 → 인물 그려 내기 → 감정과 표정·행동 → 공간과 화면 → 씬별 핵심 순간과 분위기 → 씬별 컷과 앵글). 마지막 <b>[토론 결론]</b>이 저장되면 컷 나누기, 장면 묘사, 그림 프롬프트에 모두 같이 들어가요.</p>
       <div className="row">
         <b>1.</b> <button onClick={async () => { try { await saveFile(new Blob([fullScriptText(p, scenes)], { type: 'text/plain' }), scriptFileName(p)); } catch (e: any) { toast('파일 저장 실패: ' + (e?.message || e)); } }}>시나리오 파일 보내기</button>
         <span className="muted small-t">→ AI 대화창에 첨부해요</span>
