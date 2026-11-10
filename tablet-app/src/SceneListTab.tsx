@@ -19,6 +19,7 @@ export default function SceneListTab({ p, update, go }: WsProps) {
   const [open, setOpen] = useState<Set<string>>(new Set());
   const [filter, setFilter] = useState('');
   const [allAi, setAllAi] = useState(false);
+  const [fromDebate, setFromDebate] = useState(false);
   const [debate, setDebate] = useState(false);
   const toggle = (id: string) => setOpen(o => { const n = new Set(o); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const setMeta = (sid: string, k: 'summary' | 'notes', v: string) => update(x => ({ ...x, scenes: { ...x.scenes, [sid]: { ...x.scenes[sid], [k]: v } } }));
@@ -67,8 +68,8 @@ export default function SceneListTab({ p, update, go }: WsProps) {
           })}
         </tbody>
       </table>
-      {debate && <DebateModal p={p} update={update} onClose={() => setDebate(false)} onNext={() => { setDebate(false); setAllAi(true); }} />}
-      {allAi && <AiSplitModal p={p} scenes={scenes} names={names} onBible={t => update(x => ({ ...x, bible: t }))} onClose={() => setAllAi(false)} onApply={g => update(x => g.reduce((acc, [sc, list, st, keep]) => applyAiCuts(acc, sc, list, undefined, st, keep), x))} />}
+      {debate && <DebateModal p={p} update={update} onClose={() => setDebate(false)} onNext={() => { setDebate(false); setFromDebate(true); setAllAi(true); }} />}
+      {allAi && <AiSplitModal fromDebate={fromDebate} p={p} scenes={scenes} names={names} onBible={t => update(x => ({ ...x, bible: t }))} onClose={() => { setAllAi(false); setFromDebate(false); }} onApply={g => update(x => g.reduce((acc, [sc, list, st, keep]) => applyAiCuts(acc, sc, list, undefined, st, keep), x))} />}
     </div></div>
   );
 }
@@ -210,10 +211,19 @@ function DebateModal({ p, update, onClose, onNext }: { p: Project; update: WsPro
       <div className="row">
         <b>2.</b> <button className="primary" onClick={() => copy(buildDebateRequest(p))}>토론 요청 복사</button>
         <button onClick={() => copy(DEBATE_NEXT)}>"다음" 요청 복사</button>
-        {rounds > 0 && <button onClick={() => copy(buildDebateSummaryRequest())} title="토론은 끝났는데 결론이 짧을 때, 같은 대화창에 붙여 넣어요">결론 자세히 다시 받기</button>}
+        {false && rounds > 0 && <button onClick={() => copy(buildDebateSummaryRequest())} title="토론은 끝났는데 결론이 짧을 때, 같은 대화창에 붙여 넣어요">결론 자세히 다시 받기</button>}
         <button onClick={() => openAiSide()}>AI 옆 화면에 열기 ◫</button>
-        <span className="muted small-t">→ 한 번에 1~2부씩 답해요. 끝까지 "다음"으로 이어 받아요</span>
+        <span className="muted small-t">→ 한 번에 1~2부씩 답해요. 6부(씬별 컷과 앵글)는 몇 씬씩. 끝까지 "다음"으로 이어 가요</span>
       </div>
+      <div className="row"><b>3.</b> <span className="small-t">토론 답은 앱에 붙여 넣지 않아도 돼요. ChatGPT에서 "다음"으로 6부 마지막 씬까지 이어 가다가 <b>"토론 끝"</b>이 나오면 아래 <b>②</b>를 눌러요.</span></div>
+      {<div className="box-b" style={{ background: 'var(--soft)', borderRadius: 8, padding: 8 }}>
+        <div className="row small-t"><b>캐릭터 시트</b><span className="muted">토론 2부(인물 그려 내기)가 끝나면, 같은 대화창에 붙여 넣어요. AI가 2부 내용을 정리한 뒤 그대로 마커펜 스토리보드풍 캐릭터 시트를 그려요. 한 번에 한 사람씩.</span></div>
+        <div className="row" style={{ flexWrap: 'wrap', marginTop: 6 }}>
+          {(showAll ? people : people.slice(0, 8)).map(n => <button key={n} className="small" onClick={() => copy(buildCharSheetRequest(n, p.chars.find(c => c.name === n)?.look))}>{n} 시트 요청 복사</button>)}
+          {people.length > 8 && <button className="small ghost" onClick={() => setShowAll(!showAll)}>{showAll ? '주요 인물만' : `+${people.length - 8}명 더`}</button>}
+        </div>
+      </div>}
+      <details><summary className="small-t">(선택) 토론 답을 앱에도 저장하기</summary><div style={{ display: 'grid', gap: 8, marginTop: 8 }}>
       <div className="row"><b>3.</b> <button onClick={paste}>AI 답 붙여넣기</button><span className="muted small-t">받은 답을 매번 붙여 넣고 "모으기"를 눌러요. 결론이 나오면 자동으로 저장돼요</span></div>
       <textarea value={text} onChange={e => setText(e.target.value)} rows={7} style={{ width: '100%', fontSize: 14 }} placeholder={'감독: …\n작가: …\n평론가: …'} />
       <div className="row" style={{ justifyContent: 'flex-end' }}>
@@ -221,25 +231,19 @@ function DebateModal({ p, update, onClose, onNext }: { p: Project; update: WsPro
         {rounds > 0 && <button className="small danger" onClick={() => { if (confirm('토론 기록과 결론을 지울까요?')) update(x => ({ ...x, debateLog: undefined, debate: undefined })); }}>처음부터 다시</button>}
         <button className="primary" disabled={!text.trim()} onClick={add}>모으기</button>
       </div>
-      {rounds > 0 && <div className="box-b" style={{ background: 'var(--soft)', borderRadius: 8, padding: 8 }}>
-        <div className="row small-t"><b>캐릭터 시트</b><span className="muted">토론 2부(인물 그려 내기)가 끝나면, 같은 대화창에 붙여 넣어요. AI가 2부 내용을 정리한 뒤 그대로 마커펜 스토리보드풍 캐릭터 시트를 그려요. 한 번에 한 사람씩.</span></div>
-        <div className="row" style={{ flexWrap: 'wrap', marginTop: 6 }}>
-          {(showAll ? people : people.slice(0, 8)).map(n => <button key={n} className="small" onClick={() => copy(buildCharSheetRequest(n, p.chars.find(c => c.name === n)?.look))}>{n} 시트 요청 복사</button>)}
-          {people.length > 8 && <button className="small ghost" onClick={() => setShowAll(!showAll)}>{showAll ? '주요 인물만' : `+${people.length - 8}명 더`}</button>}
-        </div>
-      </div>}
       <div className="row small-t"><b>토론 결론</b><span className="muted">{p.debate ? `${p.debate.length.toLocaleString()}자 · 고칠 수 있어요. 씬마다 그 씬의 인물·장소·[씬] 항목을 골라 같이 보내요.` : '아직 없어요. 마지막 답의 [토론 결론]이 여기 들어와요.'}</span>
         {p.debate && p.debate.length < 1500 && <span style={{ color: 'var(--accent)' }}>결론이 짧아요. "결론 자세히 다시 받기"를 눌러 보세요.</span>}</div>
       <LazyText value={p.debate || ''} rows={10} placeholder={'이야기의 핵심: …\n톤앤무드: …\n색감·조명: …\n카메라 언어: …\n인물: 이름 - 생김새, 몸짓, 표정 …\n공간: …\n씬별 화면: S#1 - …'} onSave={v => update(x => ({ ...x, debate: v.trim() || undefined }))} />
       {p.debateLog && <details><summary className="small-t">토론 전체 기록 보기</summary><pre style={{ whiteSpace: 'pre-wrap', fontSize: 13, maxHeight: 400, overflow: 'auto', background: 'var(--soft)', padding: 10, borderRadius: 8 }}>{p.debateLog}</pre></details>}
+      </div></details>
       <div className="row" style={{ justifyContent: 'flex-end' }}>
-        <button className="primary" disabled={!p.debate} onClick={onNext}>② 이 결론으로 컷 나누기 →</button>
+        <button className="primary" onClick={onNext} title="토론하던 대화창에 붙여 넣으면, 토론을 근거로 씬마다 컷·앵글·장면 묘사를 받아요">② 토론 결과 받기 (컷 · 앵글 · 장면 묘사) →</button>
       </div>
     </div>
   </Modal>;
 }
 
-function AiSplitModal({ p, scene, scenes, names, onClose, onApply, onBible }: { p: Project; scene?: Scene; scenes: Scene[]; names: string[]; onClose: () => void; onApply: (byScene: [Scene, AICut[], string?, number?][]) => void; onBible: (t: string) => void }) {
+function AiSplitModal({ p, scene, scenes, names, onClose, onApply, onBible, fromDebate }: { fromDebate?: boolean; p: Project; scene?: Scene; scenes: Scene[]; names: string[]; onClose: () => void; onApply: (byScene: [Scene, AICut[], string?, number?][]) => void; onBible: (t: string) => void }) {
   const [bibleOpen, setBibleOpen] = useState(false);
   const allScenes = useMemo(() => getScenes(p.lines), [p.lines]);
   const toast = useToast();
@@ -281,7 +285,7 @@ function AiSplitModal({ p, scene, scenes, names, onClose, onApply, onBible }: { 
   const [rFrom, setRFrom] = useState(firstNum);
   const [rTo, setRTo] = useState(lastNum);
   const range = { from: Math.min(rFrom, rTo), to: Math.max(rFrom, rTo) };
-  const request = () => scene ? buildCutSplitRequest(p, scene) : buildFullCutSplitRequest(p, scenes, per, range);
+  const request = () => scene ? buildCutSplitRequest(p, scene) : buildFullCutSplitRequest(p, scenes, per, range, fromDebate);
   const copyNext = async () => { if (!next) return; toast(await copyText(buildNextRequest(next.scene, next.cut, per, scene ? undefined : range.to)) ? '복사했어요. AI 대화창에 붙여 넣으세요.' : '복사하지 못했어요.'); };
   const loadFile = async () => { const [f] = await pickFiles('.txt,.md,text/plain,text/markdown'); if (f) setText(await f.text()); };
   const bibleIn = useMemo(() => text.trim() ? parseBible(text) : undefined, [text]);
@@ -293,7 +297,7 @@ function AiSplitModal({ p, scene, scenes, names, onClose, onApply, onBible }: { 
     if (lastCut) setNext(lastCut);
     setDone(d => [...new Set([...d, ...nums])].sort((x, y) => x - y)); setText('');
   };
-  return <Modal wide title={scene ? `S#${scene.num} AI로 컷 나누기` : 'AI로 전체 컷 나누기 (영화감독 역할)'} onClose={onClose}>
+  return <Modal wide title={scene ? `S#${scene.num} AI로 컷 나누기` : fromDebate ? '② 토론 결과 받기: 씬별 컷 · 앵글 · 장면 묘사' : 'AI로 전체 컷 나누기 (영화감독 역할)'} onClose={onClose}>
     <div style={{ display: 'grid', gap: 10 }}>
       {!scene && <p className="muted small-t" style={{ margin: 0 }}>시나리오 전체를 파일로 주고 "영화감독"으로서 모든 씬을 컷으로 나누게 해요. <b>장면 묘사(설정표와 컷 화면 묘사)도 같이 받아서</b> 장면 묘사 탭에 바로 들어가요. <b>한 번에 씬 몇 개씩</b> 받아요(답이 씬 중간에서 끊겨도 이어 붙어요). 답을 붙여 넣고 "바꾸기" → <b>"다음" 요청 복사</b> → AI에 붙여 넣기 → 답 붙여넣기.</p>}
       {!scene && <div className="row"><span className="small-t">한 번에 받을 씬</span>
@@ -315,7 +319,8 @@ function AiSplitModal({ p, scene, scenes, names, onClose, onApply, onBible }: { 
         <button className="small" onClick={async () => { try { await saveFile(new Blob([p.debateLog!], { type: 'text/plain' }), '토론기록.txt'); } catch (e: any) { toast('파일 저장 실패: ' + (e?.message || e)); } }}>토론 기록 파일 보내기</button>
         <span className="muted">→ 시나리오 파일과 같이 첨부하면 토론의 세부까지 반영돼요</span></div>}
       {bibleOpen && <LazyText value={p.bible || ''} rows={8} placeholder={'인물: 지영 - 28세, 택시 회사 사장 딸, 갈색 웨이브 머리, 빨간 매니큐어\n장소: 망원역 앞 - 4차선 사거리, 언덕 위 주택가\n차량·소품: 지영의 진녹색 구형 재규어, 빨간 폴더폰\n시대·계절: 2000년대 초, 늦가을'} onSave={v => onBible(v)} />}
-      {<div className="row">
+      {fromDebate && <div className="row small-t" style={{ background: 'var(--accent-soft)', padding: 8, borderRadius: 8 }}>토론이 끝난 <b>그 대화창</b>에 "요청 문장 복사"를 붙여 넣어요. 시나리오 파일은 이미 첨부돼 있으니 다시 보내지 않아도 돼요. 받은 답을 붙여 넣으면 씬마다 컷·앵글·장면 묘사(설정표, 화면)가 들어가요.</div>}
+      {!fromDebate && <div className="row">
         <b>1.</b> <button className={scene ? '' : 'primary'} onClick={async () => { try { await saveFile(new Blob([fullScriptText(p, allScenes)], { type: 'text/plain' }), scriptFileName(p)); } catch (e: any) { toast('파일 저장 실패: ' + (e?.message || e)); } }}>시나리오 파일 보내기</button>
         <span className="muted small-t">→ {scene ? '(권장) 시나리오 전체를 같이 주면 뒤 씬 설정까지 반영돼요. ' : ''}공유 창에서 ChatGPT를 고르거나, 저장된 파일(문서/시나리오작업실)을 대화창에 첨부해요</span>
       </div>}

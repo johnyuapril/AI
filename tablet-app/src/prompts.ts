@@ -230,9 +230,7 @@ export function buildDebateRequest(p: Project): string {
     '     - 분위기에 맞는 화면 구성: 앞·뒤 깊이(전경·배경), 문틀·창 같은 틀 안의 틀, 빈 공간, 대칭과 치우침, 인물의 화면 속 위치와 크기, 빛과 그림자',
     '     - 시선과 방향의 연결(180도 선, 시선 방향, 움직이는 방향)이 끊기지 않는지',
     '     감독이 컷 구성을 내면, 작가는 그 컷이 인물의 속마음을 제대로 담는지, 평론가는 관객이 그 순서로 무엇을 알게 되고 느끼는지 따져서 함께 고쳐. 씬이 많으니 6부는 씬 몇 개씩 나눠서 "다음"으로 끝까지 이어 가고, 씬을 건너뛰거나 뭉뚱그리지 마.',
-    '- 다 끝나면 [토론 결론]을 정리해. 형식은 아래 [결론 형식]을 따라.',
-    '',
-    ...DEBATE_FORMAT,
+    '- 6부의 마지막 씬까지 끝나면 따로 결론을 정리하지 말고 "토론 끝"이라고만 써. 토론을 근거로 한 최종 콘티는 내가 따로 요청할게.',
     '',
     '지금은 1부부터 시작해 줘.',
   ].join('\n');
@@ -298,7 +296,7 @@ export function buildCharSheetRequest(name: string, look?: string): string {
   ].join('\n');
 }
 
-export const DEBATE_NEXT = '다음. 앞과 같은 깊이로 이어서 토론해 줘. 감독은 연출, 작가는 이야기·인물, 평론가는 관객·해석의 눈으로 각자 다른 관점을 내고, 맞장구 대신 근거를 대며 따져 줘. 시나리오를 고치거나 보완하는 이야기는 하지 말고, 이 시나리오를 어떻게 이해하고 인물의 표정·행동과 화면을 어떻게 구체적으로 그려 낼지만. 6부(씬별 컷과 앵글)는 씬 몇 개씩 끝까지 이어 가고, 마지막 씬까지 끝났으면 [결론 형식]대로 [토론 결론]을 자세히 정리해 줘. 결론을 쓰는 중이었다면 [토론 결론 계속]으로 이어서.';
+export const DEBATE_NEXT = '다음. 앞과 같은 깊이로 이어서 토론해 줘. 감독은 연출, 작가는 이야기·인물, 평론가는 관객·해석의 눈으로 각자 다른 관점을 내고, 맞장구 대신 근거를 대며 따져 줘. 시나리오를 고치거나 보완하는 이야기는 하지 말고, 이 시나리오를 어떻게 이해하고 인물의 표정·행동과 화면을 어떻게 구체적으로 그려 낼지만. 6부(씬별 컷과 앵글)는 씬 몇 개씩 끝까지 이어 가고, 마지막 씬까지 끝났으면 결론은 쓰지 말고 "토론 끝"이라고만 써 줘.';
 /** 토론을 이미 끝낸 뒤, 결론만 자세히 다시 받기 */
 export function buildDebateSummaryRequest(): string {
   return ['지금까지 세 사람이 나눈 토론 전체를 바탕으로 [토론 결론]을 처음부터 다시, 아주 자세히 정리해 줘. 앞에 쓴 결론은 너무 짧았어.', '', ...DEBATE_FORMAT].join('\n');
@@ -378,7 +376,7 @@ export function fullScriptText(p: Project, scenes: Scene[]): string {
 }
 export const scriptFileName = (_p: Project) => '시나리오.txt'; // 제목을 빼서 실제 작품 검색을 막음
 /** 시나리오는 파일로 첨부하고, 이 요청 문장만 붙여 넣음 */
-export function buildFullCutSplitRequest(p: Project, scenes: Scene[], per = 3, range?: { from: number; to: number }): string {
+export function buildFullCutSplitRequest(p: Project, scenes: Scene[], per = 3, range?: { from: number; to: number }, fromDebate = false): string {
   const looks = charList(p, p.lines);
   const nums = scenes.map(s => s.num);
   const from = range?.from ?? nums[0] ?? 1;
@@ -387,8 +385,16 @@ export function buildFullCutSplitRequest(p: Project, scenes: Scene[], per = 3, r
   const first = inRange[0] ?? from;
   const last = inRange[Math.min(per, inRange.length) - 1] ?? first;
   const partial = range && (from !== nums[0] || to !== nums[nums.length - 1]);
-  const parts = [...DIRECTOR_RULES.map(r => r.replace(/씬 3개/g, `씬 ${per}개`)),
-    `- 시나리오 전체는 첨부한 파일 "${scriptFileName(p)}"에 있어. 파일을 끝까지 읽고 이야기 전체를 이해한 다음 작업해 줘. (씬 ${scenes.length}개)`];
+  const parts = [
+    ...(fromDebate ? [
+      '[토론 결과 정리] 지금까지 이 대화에서 감독·작가·평론가가 나눈 토론(1부~6부)이 끝났어. 이제 그 토론을 근거로 감독이 씬바이씬 최종 콘티를 정리해 줘.',
+      '- 토론에서 합의한 인물의 생김새·옷차림·몸짓·표정, 공간과 빛, 씬별 분위기, 6부에서 정한 씬별 컷 나누기와 샷 크기·앵글·카메라 움직임을 그대로 따라. 토론에서 다루지 못한 부분만 같은 원칙으로 채워.',
+      '- 토론 내용을 요약하거나 다시 쓰지 말고, 아래 [답하는 형식]의 콘티로만 답해.',
+      '',
+    ] : []),
+    ...DIRECTOR_RULES.map(r => r.replace(/씬 3개/g, `씬 ${per}개`)),
+    fromDebate ? `- 시나리오는 이 대화 처음에 첨부한 파일 "${scriptFileName(p)}"(문장마다 번호)야. 대본 번호와 대사 번호는 그 파일의 번호로. (씬 ${scenes.length}개)`
+      : `- 시나리오 전체는 첨부한 파일 "${scriptFileName(p)}"에 있어. 파일을 끝까지 읽고 이야기 전체를 이해한 다음 작업해 줘. (씬 ${scenes.length}개)`];
   if (partial) parts.push(`- 이번에 나눌 씬은 S#${from}부터 S#${to}까지(${inRange.length}개)야. 앞뒤 씬은 흐름 이해에만 쓰고 답하지 마. S#${to}까지 끝나면 "끝"이라고 써.`);
   if (!p.bible?.trim()) parts.push('- 첫 답의 맨 앞에 [작품 설정]을 써: 시나리오 전체를 읽고 인물별(나이, 직업, 관계, 생김새, 늘 입는 옷, 소지품, 버릇), 주요 장소별(구조, 위치, 분위기), 차량·소품, 시대·계절을 한 줄씩. 뒤 씬에서 드러나는 것까지 모두. 그다음 [설정표]와 컷을 써.');
   if (p.debate?.trim()) parts.push('- [3인 토론 결론]의 인물 몸짓·표정·위치, 공간, [씬] 항목의 순간들을 컷 나누기와 "화면" 묘사에 빠짐없이 살려. [씬] 항목에 "컷 구성"이 있으면 그 컷 순서·샷 크기·앵글·움직임을 기본으로 따르고, 한 컷에 담기지 않는 것만 나눠서 보태. "화면"은 이때 3~5문장으로, 눈·입·손·어깨까지 구체적으로. 토론 기록 파일을 첨부했으면 그 대화의 세부도 참고해.');
