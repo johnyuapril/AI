@@ -11,7 +11,7 @@ import { getImageBlob } from './store';
 import { DEFAULT_STYLE } from './store';
 import type { Settings } from './types';
 import { cutValues } from './script';
-import { comfyAutoSetup, comfyAutoStart, pickCheckpoint, SDXL_MODEL, comfyCheck, comfyCheckpoints, comfyDraw, comfyStartNote, DEFAULT_COMFY, type ComfySettings } from './comfy';
+import { comfyFindRunning, qwenFind, comfyAutoSetup, comfyAutoStart, pickCheckpoint, SDXL_MODEL, comfyCheck, comfyCheckpoints, comfyDraw, comfyStartNote, DEFAULT_COMFY, type ComfySettings } from './comfy';
 import { desktop, isDesktop } from './native';
 
 const comfyOf = (s: Settings): ComfySettings => ({ ...DEFAULT_COMFY, ...(s.comfy || {}) });
@@ -20,12 +20,15 @@ async function drawCut(p: Project, settings: Settings, cut: Cut, setCut: (k: str
   const c = comfyOf(settings);
   const m = p.cuts[cut.key] || {};
   const en = m.en?.trim();
-  if (!en && !c.workflow) throw new Error(`${cut.label}: 영문 프롬프트가 없어요. 씬 위의 "영문 프롬프트 요청 복사"로 먼저 받아 주세요.`);
-  const prompt = en || (m.desc || cut.action || '');
-  // 인물 참고 그림(캐릭터 시트): 컷의 첫 인물
-  const who = cutValues(p, cut).chars.map(n => p.chars.find(ch => ch.name === n)).find(ch => ch?.sheet);
-  const ref = who?.sheet ? await getImageBlob(who.sheet) : undefined;
-  const blob = await comfyDraw(c, prompt, { ref: ref || undefined, refName: who ? `sw_${who.name}.png` : undefined, onWait });
+  const prompt = en || [m.desc || cut.action || '', cut.auto.note || ''].filter(Boolean).join(' / ');
+  // 인물 참고 그림(캐릭터 시트): 컷에 나오는 인물 중 시트가 있는 사람 (최대 3명)
+  const refs = [];
+  for (const ch of cutValues(p, cut).chars.map(n => p.chars.find(x => x.name === n))) {
+    if (!ch?.sheet || refs.length >= 3) continue;
+    const b = await getImageBlob(ch.sheet); if (b) refs.push({ blob: b, name: `sw_char_${ch.sheet}.png`, label: ch.name + (ch.look.trim() ? ` (${ch.look.trim().slice(0, 120)})` : '') });
+  }
+  const styleRef = settings.styleImg ? await getImageBlob(settings.styleImg) || undefined : undefined;
+  const blob = await comfyDraw(c, prompt, { refs, styleRef, onWait, korean: !en, label: cut.label });
   const id = await storeImageFile(blob);
   setCut(cut.key, { img: id, wait: false });
 }
@@ -220,6 +223,7 @@ function ComfyPanel({ p, update, settings, setSettings, onBig }: { p: Project; u
   React.useEffect(() => { if (comfyStartNote) setStatus(comfyStartNote); }, []);
   const [status, setStatus] = useState('');
   const [ckpts, setCkpts] = useState<string[]>([]);
+  const [qwen, setQwen] = useState('');
   const set = (patch: Partial<ComfySettings>) => setSettings({ ...settings, comfy: { ...c, ...patch } });
   const [dl, setDl] = useState('');
   React.useEffect(() => { desktop?.onComfyDl?.(x => setDl(x.done ? '' : `받는 중 ${Math.round(x.got / 1048576)}MB${x.total ? ` / ${Math.round(x.total / 1048576)}MB` : ''}`)); }, []);
@@ -231,18 +235,16 @@ function ComfyPanel({ p, update, settings, setSettings, onBig }: { p: Project; u
   };
   const check = async () => {
     setStatus('연결하는 중…');
-    // ComfyUI 데스크톱 앱은 8000, 직접 설치(포터블)는 8188 포트를 써서 둘 다 시도
-    const urls = [c.url, ...(/^(https?:\/\/)?(127\.0\.0\.1|localhost):(8188|8000)\/?$/.test(c.url.trim()) ? ['http://127.0.0.1:8000', 'http://127.0.0.1:8188'].filter(u => u !== c.url.trim().replace(/\/$/, '')) : [])];
-    let err = '';
-    for (const url of urls) {
-      try {
-        const cc = { ...c, url }; const msg = await comfyCheck(cc); const list: string[] = await comfyCheckpoints(cc).catch(() => []);
-        setCkpts(list); setStatus(msg + (list.length ? ` · 모델 ${list.length}개` : ' · 모델(체크포인트)이 없어요'));
-        const best = pickCheckpoint(list);
-        set({ url, ...((!c.ckpt || !list.includes(c.ckpt)) && best ? { ckpt: best } : {}) }); return;
-      } catch (e: any) { if (!err) err = String(e?.message || e); }
-    }
-    setStatus(err);
+    const url = await comfyFindRunning(c);
+    if (!url) { setStatus(`ComfyUI에 연결하지 못했어요 (${c.url}, 8189, 8188, 8000 확인). ComfyUI가 켜져 있는지 확인해 주세요.`); return; }
+    try {
+      const cc = { ...c, url }; const msg = await comfyCheck(cc);
+      const list: string[] = await comfyCheckpoints(cc).catch(() => []); setCkpts(list);
+      const q = await qwenFind(cc).catch(() => null); setQwen(q ? q.unet : '');
+      const best = pickCheckpoint(list);
+      setStatus(`${msg} · ${q ? 'Qwen-Image 2.1 있음 (캐릭터 시트 참고)' : best ? 'SDXL 모델 있음' : '그림 모델 없음'}`);
+      set({ url, ...((!c.ckpt || !list.includes(c.ckpt)) ? { ckpt: best } : {}) });
+    } catch (e: any) { setStatus(String(e?.message || e)); }
   };
   const loadWf = async () => {
     const [f] = await pickFiles('.json,application/json'); if (!f) return;
@@ -278,13 +280,18 @@ function ComfyPanel({ p, update, settings, setSettings, onBig }: { p: Project; u
       {isDesktop() && <div className="row small-t">
         <label className="row" style={{ gap: 4 }}><input type="checkbox" checked={c.autoStart !== false} onChange={e => set({ autoStart: e.target.checked })} /> 이 앱을 켜면 ComfyUI도 같이 켜기</label>
         <button className="small" onClick={async () => { const r = await comfyAutoStart(c); setStatus(comfyStartNote); if (r.notFound) return; const p2 = await comfyAutoSetup(c, 180_000, setStatus); set({ ...(r.launched ? { exe: r.launched } : {}), ...(p2 || {}) }); }}>지금 켜고 맞추기</button>
-        {desktop?.comfyGetModel && <button className="small" disabled={!!dl} onClick={getModel} title={`SDXL 공식 모델 ${SDXL_MODEL.size}를 ComfyUI 모델 폴더에 받아요`}>{dl || `SDXL 모델 받기 (${SDXL_MODEL.size})`}</button>}
+        {desktop?.comfyGetModel && !qwen && !c.ckpt && <button className="small" disabled={!!dl} onClick={getModel} title={`SDXL 공식 모델 ${SDXL_MODEL.size}를 ComfyUI 모델 폴더에 받아요`}>{dl || `SDXL 모델 받기 (${SDXL_MODEL.size})`}</button>}
         {desktop?.pickFile && <button className="small" onClick={async () => { const f = await desktop!.pickFile!('ComfyUI 실행 파일 고르기 (ComfyUI.exe 또는 run_nvidia_gpu.bat)', [{ name: 'ComfyUI', extensions: ['exe', 'bat', 'cmd'] }]); if (f) { set({ exe: f }); toast('ComfyUI 위치를 기억했어요.'); } }}>ComfyUI 위치 고르기</button>}
         <span className="muted">{c.exe ? c.exe : comfyStartNote || '설치 위치는 자동으로 찾아요'}</span>
       </div>}
       <div className="muted small-t">{isDesktop() ? '이 PC에서 ComfyUI를 켜 두면 기본 주소 그대로 돼요.' : '태블릿에서는 PC 주소(예: http://192.168.0.10:8188)를 쓰고, PC의 ComfyUI를 --listen --enable-cors-header 로 켜야 해요.'}</div>
       <div className="row">
-        <b>모델</b>
+        <b>엔진</b>
+        <select value={c.engine || 'auto'} onChange={e => set({ engine: e.target.value as ComfySettings['engine'] })} disabled={!!c.workflow}>
+          <option value="auto">자동 (Qwen 있으면 Qwen)</option><option value="qwen">Qwen-Image 2.1 (시트 참고)</option><option value="sdxl">SDXL (글만)</option>
+        </select>
+        {qwen && <span className="chip on" title={qwen}>Qwen 있음</span>}
+        <b>SDXL 모델</b>
         <select value={c.ckpt || ''} onChange={e => set({ ckpt: e.target.value })} disabled={!!c.workflow}>
           {!c.ckpt && <option value="">연결 확인을 눌러 고르세요</option>}
           {[...new Set([...(c.ckpt ? [c.ckpt] : []), ...ckpts])].map(n => <option key={n} value={n}>{n}</option>)}

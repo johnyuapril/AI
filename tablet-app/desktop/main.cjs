@@ -115,22 +115,31 @@ ipcMain.handle('desktop:fetchBin', async (_e, { url, method, headers, body }) =>
   const r = await fetch(url, { method: method || 'GET', headers: headers || {}, body: body == null ? undefined : (typeof body === 'string' ? body : Buffer.from(body)) });
   return { status: r.status, type: r.headers.get('content-type') || '', data: new Uint8Array(await r.arrayBuffer()) };
 });
-// ComfyUI 켜기: 지정한 파일이 없으면 흔한 설치 위치에서 찾는다 (ComfyUI Desktop, 포터블)
+// ComfyUI 켜기: 지정한 파일 → 포터블(D: 등, 8189 Qwen 실행 파일 우선) → 데스크톱 앱 순서로 찾는다.
+// 데스크톱 앱(C:)은 C: 공간이 부족한 PC가 있어서 맨 마지막.
+function portableBats() {
+  const roots = ['D:\\', 'E:\\', 'F:\\', 'C:\\', os.homedir(), path.join(os.homedir(), 'Downloads'), path.join(os.homedir(), 'Desktop'), path.join(os.homedir(), 'Documents')];
+  const dirs = [];
+  for (const r of roots) for (const d1 of ['ComfyUI_windows_portable_nvidia', 'ComfyUI_windows_portable', 'ComfyUI']) for (const d2 of ['', 'ComfyUI_windows_portable']) dirs.push(path.join(r, d1, d2));
+  const found = [];
+  for (const d of [...new Set(dirs)]) {
+    let names = [];
+    try { names = fs.readdirSync(d).filter(n => /\.(bat|cmd)$/i.test(n) && /^run/i.test(n) && !/cpu/i.test(n)); } catch { continue; }
+    for (const n of names) found.push(path.join(d, n));
+  }
+  const rank = p => (/8189|qwen/i.test(p) ? 0 : /run_nvidia_gpu\.bat$/i.test(p) ? 1 : 2) + (/^C:/i.test(p) ? 3 : 0);
+  return found.sort((a, b) => rank(a) - rank(b));
+}
 function comfyCandidates() {
   const la = process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local');
   const pf = [process.env.ProgramFiles, process.env['ProgramFiles(x86)']].filter(Boolean);
-  const list = [
+  return [
+    ...portableBats(),
     path.join(la, 'Programs', '@comfyorgcomfyui-electron', 'ComfyUI.exe'),
     path.join(la, 'Programs', 'ComfyUI', 'ComfyUI.exe'),
     path.join(la, 'Programs', 'comfyui-electron', 'ComfyUI.exe'),
     ...pf.map(d => path.join(d, 'ComfyUI', 'ComfyUI.exe')),
   ];
-  // 포터블: 드라이브 바로 아래나 내 폴더, 다운로드, 바탕화면
-  const roots = ['C:\\', 'D:\\', 'E:\\', os.homedir(), path.join(os.homedir(), 'Downloads'), path.join(os.homedir(), 'Desktop'), path.join(os.homedir(), 'Documents')];
-  for (const r of roots) for (const d of ['ComfyUI_windows_portable', 'ComfyUI_windows_portable_nvidia', 'ComfyUI']) {
-    list.push(path.join(r, d, 'run_nvidia_gpu.bat'));
-  }
-  return list;
 }
 ipcMain.handle('desktop:comfyLaunch', async (_e, { exe }) => {
   const found = [exe, ...comfyCandidates()].filter(Boolean).find(p => { try { return fs.statSync(p).isFile(); } catch { return false; } });
@@ -139,21 +148,26 @@ ipcMain.handle('desktop:comfyLaunch', async (_e, { exe }) => {
   else spawn(found, [], { cwd: path.dirname(found), detached: true, stdio: 'ignore' }).unref();
   return { ok: true, path: found };
 });
-// ComfyUI 모델 폴더 찾기: Desktop 은 %APPDATA%\ComfyUI\config.json 의 basePath, 포터블은 실행 파일 옆
-function comfyModelDir(exe) {
+// ComfyUI 모델 폴더 찾기: 포터블(실행 파일 옆) 먼저, 그다음 데스크톱 앱 설정(%APPDATA%\ComfyUI\config.json basePath)
+function comfyModelDirs(exe) {
   const out = [];
+  const add = bat => out.push(path.join(path.dirname(bat), 'ComfyUI', 'models', 'checkpoints'));
+  if (exe && /\.(bat|cmd)$/i.test(exe)) add(exe);
+  for (const b of portableBats()) add(b);
   try {
     const cfg = JSON.parse(fs.readFileSync(path.join(app.getPath('appData'), 'ComfyUI', 'config.json'), 'utf8'));
     if (cfg.basePath) out.push(path.join(cfg.basePath, 'models', 'checkpoints'));
   } catch { /* 없음 */ }
-  if (exe && /\.(bat|cmd)$/i.test(exe)) out.push(path.join(path.dirname(exe), 'ComfyUI', 'models', 'checkpoints'));
-  out.push(path.join(os.homedir(), 'Documents', 'ComfyUI', 'models', 'checkpoints'));
-  return out.find(d => { try { return fs.statSync(d).isDirectory(); } catch { return false; } }) || '';
+  return [...new Set(out)].filter(d => { try { return fs.statSync(d).isDirectory(); } catch { return false; } });
 }
+const freeGB = d => { try { const s = fs.statfsSync(d); return s.bavail * s.bsize / 1073741824; } catch { return 0; } };
 // 모델 받기 (수 GB): 다 받은 뒤 이름을 바꿔서, 받다 만 파일을 ComfyUI가 읽지 않게
 ipcMain.handle('desktop:comfyGetModel', async (_e, { exe, url, name }) => {
-  const dir = comfyModelDir(exe);
-  if (!dir) throw new Error('ComfyUI 모델 폴더(models/checkpoints)를 찾지 못했어요.');
+  const dirs = comfyModelDirs(exe);
+  if (!dirs.length) throw new Error('ComfyUI 모델 폴더(models/checkpoints)를 찾지 못했어요.');
+  // 받을 크기 + 여유 3GB 가 없는 드라이브에는 쓰지 않음 (C: 가 거의 찬 PC가 있음)
+  const dir = dirs.find(d => freeGB(d) > 10);
+  if (!dir) throw new Error('모델을 받을 공간이 부족해요 (10GB 이상 필요). 모델 폴더: ' + dirs.join(', '));
   const dest = path.join(dir, name);
   if (fs.existsSync(dest)) return dest;
   const tmp = dest + '.part';
