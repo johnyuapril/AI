@@ -12,7 +12,7 @@ import AnalysisTab from './AnalysisTab';
 import { Modal, useToast } from './ui';
 import { importFile, toFountain } from './importer';
 import { exportProject } from './backup';
-import { isDesktop, openAiSide, pickFiles, saveFile } from './native';
+import { isDesktop, openAiSide, AI_APPS, preferredAi, setPreferredAi, pickFiles, saveFile } from './native';
 import { exportScriptPdf } from './pdf';
 import { getLinks, syncProject } from './gsync';
 import { openExternal } from './update';
@@ -26,6 +26,7 @@ const TABS: [Tab, string][] = [['script', '대본'], ['list', '신 리스트'], 
 export default function Workspace({ id, onClose, settings, setSettings }: { id: string; onClose: () => void; settings: Settings; setSettings: (s: Settings) => void }) {
   const [p, setP] = useState<Project | null>(null);
   const [tab, setTab] = useState<Tab>('script');
+  const [aiApp, setAiApp] = useState(preferredAi);
   const [focusScene, setFocusScene] = useState<string | undefined>();
   const [menu, setMenu] = useState(false);
   const [busy, setBusy] = useState('');
@@ -97,7 +98,10 @@ export default function Workspace({ id, onClose, settings, setSettings }: { id: 
         </div>
         <div className="grow" />
         {busy && <span className="muted small-t">{busy}</span>}
-        <button className="ghost small" title="ChatGPT를 옆 화면에 열기" onClick={() => openAiSide()}>AI 열기 ◫</button>
+        <select className="small" value={aiApp} title="복사·붙여넣기에 쓰는 AI" onChange={e => { setPreferredAi(e.target.value); setAiApp(e.target.value); }}>
+          {AI_APPS.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+        </select>
+        <button className="ghost small" title="AI를 옆 화면에 열기" onClick={() => openAiSide(aiApp)}>AI 열기 ◫</button>
         {settings.gsync && <button className="ghost small" title={gs.msg} onClick={() => gsync(true)}>
           {gs.st === 'busy' ? '구글 올리는 중…' : gs.st === 'err' ? '구글 실패 ↻' : gs.at ? `구글 ✓ ${new Date(gs.at).toTimeString().slice(0, 5)}` : '구글에 올리기'}</button>}
         <select value={p.format} onChange={e => update(x => ({ ...x, format: e.target.value as Format }))} title="대본 양식">

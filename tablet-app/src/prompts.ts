@@ -195,9 +195,9 @@ function bibleBlock(p: Project, scene?: Scene): string[] {
 }
 
 // -------- 감독·작가·평론가 3인 토론 --------
-export function buildDebateRequest(p: Project): string {
+export function buildDebateRequest(p: Project, oneGo = false): string {
   const n = getScenes(p.lines).length;
-  return [
+  const lines = [
     `첨부한 시나리오 파일 "${scriptFileName(p)}"(씬 ${n}개, 내가 쓴 미발표 작품)을 끝까지 읽고, 아래 세 사람이 이 시나리오를 화면으로 옮기기 전에 깊이 있게 토론하는 자리를 실제 대화로 써 줘.`,
     '',
     '[이 토론의 목적]',
@@ -232,8 +232,15 @@ export function buildDebateRequest(p: Project): string {
     '     감독이 컷 구성을 내면, 작가는 그 컷이 인물의 속마음을 제대로 담는지, 평론가는 관객이 그 순서로 무엇을 알게 되고 느끼는지 따져서 함께 고쳐. 씬이 많으니 6부는 씬 몇 개씩 나눠서 "다음"으로 끝까지 이어 가고, 씬을 건너뛰거나 뭉뚱그리지 마.',
     '- 6부의 마지막 씬까지 끝나면 따로 결론을 정리하지 말고 "토론 끝"이라고만 써. 토론을 근거로 한 최종 콘티는 내가 따로 요청할게.',
     '',
-    '지금은 1부부터 시작해 줘.',
-  ].join('\n');
+    ];
+  if (!oneGo) return [...lines, '지금은 1부부터 시작해 줘.'].join('\n');
+  // 한 번에 끝까지: 중간에 "다음"을 기다리지 않고, 파일 만들기로 부마다 이어 써서 길이 한계를 넘김 (Claude 추천)
+  const one = lines.map(l => l.startsWith('- 아래 순서로 한 부씩 깊게.')
+    ? '- 아래 순서로 1부부터 6부까지 한 부씩 깊게, 중간에 멈추거나 나에게 묻지 말고 끝까지 진행해. 답이 아주 길어지니 파일 만들기 기능으로 "토론.md" 파일을 만들고 부마다 그 파일에 이어 써. 뒤로 갈수록 줄이거나 요약하지 말고 모든 부를 같은 깊이로.'
+    : l.startsWith('- 6부의 마지막 씬까지 끝나면')
+    ? '- 6부의 마지막 씬까지 다 쓰면 "토론.md"를 내려받을 수 있게 하고, 대화창에는 "토론 끝"이라고만 써. 토론을 근거로 한 최종 콘티는 내가 따로 요청할게.'
+    : l.replace('씬이 많으니 6부는 씬 몇 개씩 나눠서 "다음"으로 끝까지 이어 가고, 씬을 건너뛰거나 뭉뚱그리지 마.', '6부는 모든 씬을 하나씩, 건너뛰거나 뭉뚱그리지 마.'));
+  return [...one, '지금 1부부터 6부까지 끝까지 진행해 줘.'].join('\n');
 }
 const DEBATE_FORMAT = [
   '[결론 형식]',
@@ -376,7 +383,7 @@ export function fullScriptText(p: Project, scenes: Scene[]): string {
 }
 export const scriptFileName = (_p: Project) => '시나리오.txt'; // 제목을 빼서 실제 작품 검색을 막음
 /** 시나리오는 파일로 첨부하고, 이 요청 문장만 붙여 넣음 */
-export function buildFullCutSplitRequest(p: Project, scenes: Scene[], per = 3, range?: { from: number; to: number }, fromDebate = false): string {
+export function buildFullCutSplitRequest(p: Project, scenes: Scene[], per = 3, range?: { from: number; to: number }, fromDebate = false, toFile = false): string {
   const looks = charList(p, p.lines);
   const nums = scenes.map(s => s.num);
   const from = range?.from ?? nums[0] ?? 1;
@@ -390,6 +397,7 @@ export function buildFullCutSplitRequest(p: Project, scenes: Scene[], per = 3, r
       '[토론 결과 정리] 지금까지 이 대화에서 감독·작가·평론가가 나눈 토론(1부~6부)이 끝났어. 이제 그 토론을 근거로 감독이 씬바이씬 최종 콘티를 정리해 줘.',
       '- 토론에서 합의한 인물의 생김새·옷차림·몸짓·표정, 공간과 빛, 씬별 분위기, 6부에서 정한 씬별 컷 나누기와 샷 크기·앵글·카메라 움직임을 그대로 따라. 토론에서 다루지 못한 부분만 같은 원칙으로 채워.',
       '- 토론 내용을 요약하거나 다시 쓰지 말고, 아래 [답하는 형식]의 콘티로만 답해.',
+      ...(toFile ? ['- 콘티는 파일 만들기 기능으로 "콘티.txt" 파일에 씬 순서대로 이어 써. 중간에 멈추거나 묻지 말고 마지막 씬까지 모두, 뒤로 갈수록 줄이지 말고 같은 자세함으로. 다 쓰면 파일을 내려받을 수 있게 하고 대화창에는 "끝"이라고만 써.'] : []),
       '',
     ] : []),
     ...DIRECTOR_RULES.map(r => r.replace(/씬 3개/g, `씬 ${per}개`)),
@@ -400,7 +408,7 @@ export function buildFullCutSplitRequest(p: Project, scenes: Scene[], per = 3, r
   if (p.debate?.trim()) parts.push('- [3인 토론 결론]의 인물 몸짓·표정·위치, 공간, [씬] 항목의 순간들을 컷 나누기와 "화면" 묘사에 빠짐없이 살려. [씬] 항목에 "컷 구성"이 있으면 그 컷 순서·샷 크기·앵글·움직임을 기본으로 따르고, 한 컷에 담기지 않는 것만 나눠서 보태. "화면"은 이때 3~5문장으로, 눈·입·손·어깨까지 구체적으로. 토론 기록 파일을 첨부했으면 그 대화의 세부도 참고해.');
   parts.push(...bibleBlock(p));
   if (looks.length) parts.push('', '[등장인물]', ...looks);
-  parts.push('', ...ANSWER_FORMAT(first), '', `지금은 S#${first}부터 씬 ${Math.min(per, inRange.length || per)}개(S#${first}~S#${last})만 답해 줘.`);
+  parts.push('', ...ANSWER_FORMAT(first), '', toFile ? `S#${first}부터 S#${inRange[inRange.length - 1] ?? to}까지 모든 씬을 "콘티.txt" 파일로 써 줘.` : `지금은 S#${first}부터 씬 ${Math.min(per, inRange.length || per)}개(S#${first}~S#${last})만 답해 줘.`);
   return parts.join('\n');
 }
 /** 이어 받기 요청 (마지막으로 넣은 컷 다음부터 씬 per개, until 씬까지만) */

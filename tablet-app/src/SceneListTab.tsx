@@ -8,7 +8,7 @@ import type { AICut } from './types';
 import { ANGLES, MOVES, SHOT_SIZES, termLabel } from './shots';
 import { LazyText, Modal, useToast } from './ui';
 import { toCSV } from './util';
-import { openAiSide, pickFiles, saveFile } from './native';
+import { openAiSide, pickFiles, preferredAi, saveFile } from './native';
 import { cutRows, sceneRows } from './exports';
 
 export default function SceneListTab({ p, update, go }: WsProps) {
@@ -184,6 +184,8 @@ function DebateModal({ p, update, onClose, onNext }: { p: Project; update: WsPro
   const scenes = useMemo(() => getScenes(p.lines), [p.lines]);
   const rounds = (p.debateLog || '').split('\n\n━━━━━━━━\n\n').filter(Boolean).length;
   const copy = async (t: string) => toast(await copyText(t) ? '복사했어요. AI 대화창에 붙여 넣으세요.' : '복사하지 못했어요.');
+  const [oneGo, setOneGoS] = useState(() => { try { return (localStorage.getItem('debate-onego') ?? (preferredAi() === 'claude' ? '1' : '')) === '1'; } catch { return false; } });
+  const setOneGo = (v: boolean) => { setOneGoS(v); try { localStorage.setItem('debate-onego', v ? '1' : ''); } catch { /* */ } };
   const add = () => {
     const t = text.trim(); if (!t) return;
     const log = [p.debateLog, t].filter(Boolean).join('\n\n━━━━━━━━\n\n');
@@ -209,11 +211,15 @@ function DebateModal({ p, update, onClose, onNext }: { p: Project; update: WsPro
         <span className="muted small-t">→ AI 대화창에 첨부해요</span>
       </div>
       <div className="row">
-        <b>2.</b> <button className="primary" onClick={() => copy(buildDebateRequest(p))}>토론 요청 복사</button>
-        <button onClick={() => copy(DEBATE_NEXT)}>"다음" 요청 복사</button>
+        <b>2.</b> <button className="primary" onClick={() => copy(buildDebateRequest(p, oneGo))}>토론 요청 복사</button>
+        {!oneGo && <button onClick={() => copy(DEBATE_NEXT)}>"다음" 요청 복사</button>}
         {false && rounds > 0 && <button onClick={() => copy(buildDebateSummaryRequest())} title="토론은 끝났는데 결론이 짧을 때, 같은 대화창에 붙여 넣어요">결론 자세히 다시 받기</button>}
         <button onClick={() => openAiSide()}>AI 옆 화면에 열기 ◫</button>
         <span className="muted small-t">→ 한 번에 1~2부씩 답해요. 6부(씬별 컷과 앵글)는 몇 씬씩. 끝까지 "다음"으로 이어 가요</span>
+      </div>
+      <div className="row small-t">
+        <label className="row" style={{ gap: 4 }}><input type="checkbox" checked={oneGo} onChange={e => setOneGo(e.target.checked)} /> <b>한 번에 끝까지</b> (Claude 추천)</label>
+        <span className="muted">{oneGo ? 'AI가 "다음"을 기다리지 않고 1~6부를 파일(토론.md)에 이어 써요. 결과 콘티도 파일(콘티.txt)로 받아 "답 파일 불러오기"로 넣어요.' : '한 번에 1~2부씩 쓰고, 대화창에 "ㄱ"이나 "다음"을 쳐서 이어 가요.'}</span>
       </div>
       <div className="row"><b>3.</b> <span className="small-t">토론 답은 앱에 붙여 넣지 않아도 돼요. ChatGPT에서 "다음"으로 6부 마지막 씬까지 이어 가다가 <b>"토론 끝"</b>이 나오면 아래 <b>②</b>를 눌러요.</span></div>
       {<div className="box-b" style={{ background: 'var(--soft)', borderRadius: 8, padding: 8 }}>
@@ -285,9 +291,10 @@ function AiSplitModal({ p, scene, scenes, names, onClose, onApply, onBible, from
   const [rFrom, setRFrom] = useState(firstNum);
   const [rTo, setRTo] = useState(lastNum);
   const range = { from: Math.min(rFrom, rTo), to: Math.max(rFrom, rTo) };
-  const request = () => scene ? buildCutSplitRequest(p, scene) : buildFullCutSplitRequest(p, scenes, per, range, fromDebate);
+  const toFile = !!fromDebate && (() => { try { const v = localStorage.getItem('debate-onego'); return v === null ? preferredAi() === 'claude' : v === '1'; } catch { return false; } })();
+  const request = () => scene ? buildCutSplitRequest(p, scene) : buildFullCutSplitRequest(p, scenes, per, range, fromDebate, toFile);
   const copyNext = async () => { if (!next) return; toast(await copyText(buildNextRequest(next.scene, next.cut, per, scene ? undefined : range.to)) ? '복사했어요. AI 대화창에 붙여 넣으세요.' : '복사하지 못했어요.'); };
-  const loadFile = async () => { const [f] = await pickFiles('.txt,.md,text/plain,text/markdown'); if (f) setText(await f.text()); };
+  const loadFile = async () => { const fs = await pickFiles('.txt,.md,text/plain,text/markdown', true); if (!fs.length) return; fs.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true })); setText((await Promise.all(fs.map(f => f.text()))).join('\n\n')); };
   const bibleIn = useMemo(() => text.trim() ? parseBible(text) : undefined, [text]);
   const apply = () => {
     if (bibleIn && !p.bible?.trim()) { onBible(bibleIn); toast('작품 설정도 저장했어요. 다음 요청부터 같이 보내요.'); }
@@ -319,7 +326,7 @@ function AiSplitModal({ p, scene, scenes, names, onClose, onApply, onBible, from
         <button className="small" onClick={async () => { try { await saveFile(new Blob([p.debateLog!], { type: 'text/plain' }), '토론기록.txt'); } catch (e: any) { toast('파일 저장 실패: ' + (e?.message || e)); } }}>토론 기록 파일 보내기</button>
         <span className="muted">→ 시나리오 파일과 같이 첨부하면 토론의 세부까지 반영돼요</span></div>}
       {bibleOpen && <LazyText value={p.bible || ''} rows={8} placeholder={'인물: 지영 - 28세, 택시 회사 사장 딸, 갈색 웨이브 머리, 빨간 매니큐어\n장소: 망원역 앞 - 4차선 사거리, 언덕 위 주택가\n차량·소품: 지영의 진녹색 구형 재규어, 빨간 폴더폰\n시대·계절: 2000년대 초, 늦가을'} onSave={v => onBible(v)} />}
-      {fromDebate && <div className="row small-t" style={{ background: 'var(--accent-soft)', padding: 8, borderRadius: 8 }}>토론이 끝난 <b>그 대화창</b>에 "요청 문장 복사"를 붙여 넣어요. 시나리오 파일은 이미 첨부돼 있으니 다시 보내지 않아도 돼요. 받은 답을 붙여 넣으면 씬마다 컷·앵글·장면 묘사(설정표, 화면)가 들어가요.</div>}
+      {fromDebate && <div className="row small-t" style={{ background: 'var(--accent-soft)', padding: 8, borderRadius: 8 }}>토론이 끝난 <b>그 대화창</b>에 "요청 문장 복사"를 붙여 넣어요. 시나리오 파일은 이미 첨부돼 있으니 다시 보내지 않아도 돼요. {toFile ? 'AI가 만든 "콘티.txt"(여러 개면 모두)를 "답 파일 불러오기"로 넣으면' : '받은 답을 붙여 넣으면'} 씬마다 컷·앵글·장면 묘사(설정표, 화면)가 들어가요.</div>}
       {!fromDebate && <div className="row">
         <b>1.</b> <button className={scene ? '' : 'primary'} onClick={async () => { try { await saveFile(new Blob([fullScriptText(p, allScenes)], { type: 'text/plain' }), scriptFileName(p)); } catch (e: any) { toast('파일 저장 실패: ' + (e?.message || e)); } }}>시나리오 파일 보내기</button>
         <span className="muted small-t">→ {scene ? '(권장) 시나리오 전체를 같이 주면 뒤 씬 설정까지 반영돼요. ' : ''}공유 창에서 ChatGPT를 고르거나, 저장된 파일(문서/시나리오작업실)을 대화창에 첨부해요</span>

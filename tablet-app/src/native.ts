@@ -43,8 +43,11 @@ export const AI_APPS: AiApp[] = [
   { id: 'gemini', name: 'Gemini', pkg: 'com.google.android.apps.bard', url: 'https://gemini.google.com' },
   { id: 'claude', name: 'Claude', pkg: 'com.anthropic.claude', url: 'https://claude.ai' },
 ];
+/** 내가 주로 쓰는 AI (기본 Claude) */
+export function preferredAi(): string { try { return localStorage.getItem('ai-app') || 'claude'; } catch { return 'claude'; } }
+export function setPreferredAi(id: string) { try { localStorage.setItem('ai-app', id); } catch { /* */ } }
 /** AI를 옆 화면에 열기 (앱이 없으면 웹) */
-export async function openAiSide(id = 'chatgpt') {
+export async function openAiSide(id = preferredAi()) {
   const a = AI_APPS.find(x => x.id === id) || AI_APPS[0];
   if (desktop) { await desktop.openAiSide(a.url); return; }
   if (!isNative()) { window.open(a.url, '_blank'); return; }
