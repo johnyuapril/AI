@@ -132,7 +132,7 @@ const DIRECTOR_RULES = [
   '너는 이 영화를 연출하는 영화감독이야. 촬영 전에 실제로 그릴 수 있는 정밀 콘티(스토리보드)를 만들 수 있게 시나리오를 컷으로 나누고 화면을 설계해 줘.',
   '- 기계적으로 문장마다 자르지 말고, 이야기 전체의 흐름과 인물의 감정을 생각해서 감독으로서 직접 판단해: 관객에게 정보를 공개하는 순서, 샷과 샷의 연결, 인물의 위치와 동작, 카메라의 움직임.',
   '- 한 컷 = 카메라가 끊기지 않고 보여 주는 한 화면. 한 문장 안에서도 보이는 대상, 크기, 장소가 바뀌면 컷을 나눠. (예: 항공 전경 → 도로 → 코너에서 나타나는 차)',
-  '- 대본의 문장마다 (1), (2) 처럼 번호가 붙어 있어. 컷마다 그 컷이 보여 주는 대본 지문의 번호를 적고, "대본:" 줄에 그 번호의 원본 문장 전체를 한 글자도 바꾸지 말고 그대로 옮겨 적어 (어느 문장을 그렇게 묘사했는지 확인용. 이 시나리오는 내가 쓴 작품이야). 번호는 대본에 적힌 번호 그대로 쓰고 새로 세지 마. 대사·소리는 그게 들리는 동안 화면에 보이는 컷에 번호로 넣어.',
+  '- 대본의 문장마다 (1), (2) 처럼 번호가 붙어 있어. 컷마다 그 컷이 보여 주는 지문의 번호와 들리는 대사의 번호만 적어. 대본 문장이나 대사는 한 글자도 옮겨 쓰지 마 (앱이 번호로 원문을 채워). 번호는 대본에 적힌 번호 그대로 쓰고 새로 세지 마. 대사·소리는 그게 들리는 동안 화면에 보이는 컷에 번호로 넣어.',
   '- 시나리오 전체를 끝까지 먼저 읽고 작업해. 뒤 씬에서 처음 드러나는 설정(인물의 나이·직업·관계·생김새·옷차림·버릇, 장소의 구조와 위치, 차량·소품, 시대·계절, 숨겨진 사실)도 앞 씬부터 일관되게 반영하고, 이 씬만 보고 추측해서 엉뚱하게 만들지 마. [작품 설정]이 있으면 꼭 지켜.',
   '- 바깥 정보는 쓰지 마: 웹 검색을 하지 말고, 같은 제목이나 비슷한 내용의 실제 영화·드라마·원작 소설, 실제 감독·배우·제작 뒷이야기, 리뷰·평점, 다른 영화와의 비교나 인용을 모두 쓰지 마. 이 시나리오가 실제 작품과 비슷해 보여도 모르는 새 작품이라고 생각하고, 첨부한 시나리오 글만 근거로 생각해.',
   '- 샷 크기는 EWS, WS, FS, MS, MCU, CU, ECU, OTS, 2S 중에서, 앵글과 카메라 움직임은 한국어로 써.',
@@ -155,14 +155,13 @@ const ANSWER_FORMAT = (n: number) => [
   '인물: 이름 - 생김새, 옷차림, 소지품 (한 사람씩 한 줄)',
   '',
   `[${n}-1] 샷 크기 / 카메라 위치·방향 (예: 지영 오른쪽 45도 앞, 영민 어깨 너머) / 앵글 높이 (예: 로우앵글) / 움직임 / 렌즈`,
-  '대본 번호: 이 컷에 해당하는 지문 번호 (예: 2 또는 3-4)',
-  '대본: 그 번호의 원본 문장 전체 그대로 (여러 문장이면 모두)',
+  '대본 번호: 이 컷에 해당하는 지문 번호만 (예: 2 또는 3-4)',
   '화면: 이 컷 한 순간에 보이는 것 (2~4문장, 카메라가 어디서 보는지로 시작, 위치·자세·시선·손동작·접촉)',
   '연출: 왜 이렇게 찍는지 한 줄',
   '효과음: 웹툰 효과음 (없으면 없음)',
   '화면효과: 집중선/속도선/번쩍/어둡게/흔들림 (없으면 없음)',
   '인물: 화면에 나오는 인물 이름 (없으면 없음)',
-  '대사 번호: 이 컷에 들리는 대사 번호와 첫 두세 단어 (예: 7 (어디야 지금)) (없으면 없음)',
+  '대사 번호: 이 컷에 들리는 대사 번호만 (예: 7 또는 8-9) (없으면 없음)',
   '',
   `[${n}-2] …`,
 ];
@@ -561,6 +560,45 @@ function nums(v: string): number[] {
     for (let i = Math.min(a, b); i <= Math.max(a, b) && i - a < 200; i++) out.push(i);
   }
   return out;
+}
+/** 번호 없이 컷만 온 답: 씬 대본 문장을 순서대로 컷에 나눠 담기.
+ *  컷의 화면 묘사·인물과 문장이 얼마나 닮았는지 보고, 순서는 지키면서 가장 잘 맞게 나눔 */
+const bigrams = (t: string) => { const n = t.replace(/[^가-힣A-Za-z0-9]/g, ''); const b = new Set<string>(); for (let i = 0; i < n.length - 1; i++) b.add(n.slice(i, i + 2)); return b; };
+export function fillByOrder(scene: Scene, list: AICut[]): AICut[] {
+  const units = sceneUnits(scene).filter(u => u.kind !== 'trans');
+  const N = units.length, M = list.length;
+  if (!N || !M) return list;
+  const cb = list.map(c => bigrams(`${c.see} ${c.cam || ''}`));
+  const score = (i: number, j: number) => {
+    const u = units[i]; const ub = bigrams(u.text); let common = 0;
+    ub.forEach(x => { if (cb[j].has(x)) common++; });
+    let sc = common / (Math.min(ub.size, cb[j].size) + 2);
+    const chars = list[j].chars || [];
+    if (u.kind === 'dlg' && u.speaker && chars.some(n => u.speaker!.includes(n) || n.includes(u.speaker!))) sc += 0.35;
+    if (u.kind !== 'dlg' && chars.some(n => n && u.text.includes(n))) sc += 0.1;
+    return sc - 0.6 * Math.abs((j + 0.5) / M - (i + 0.5) / N); // 대략 순서대로 고르게
+  };
+  // dp[i][j]: 문장 0..i 를 나눴고 문장 i 가 컷 j 에 들어간 최고 점수 (컷 번호는 줄지 않음)
+  const dp = Array.from({ length: N }, () => new Array<number>(M).fill(-Infinity));
+  const from = Array.from({ length: N }, () => new Array<number>(M).fill(0));
+  for (let j = 0; j < M; j++) dp[0][j] = score(0, j);
+  for (let i = 1; i < N; i++) {
+    let best = -Infinity, bj = 0;
+    for (let j = 0; j < M; j++) {
+      if (dp[i - 1][j] > best) { best = dp[i - 1][j]; bj = j; }
+      dp[i][j] = best + score(i, j); from[i][j] = bj;
+    }
+  }
+  let j = dp[N - 1].indexOf(Math.max(...dp[N - 1]));
+  const at = new Array<number>(N);
+  for (let i = N - 1; i >= 0; i--) { at[i] = j; j = from[i][j]; }
+  return list.map((c, k) => {
+    const mine = units.filter((_, i) => at[i] === k);
+    const src = mine.filter(u => u.kind !== 'dlg').map(u => u.text).join(' ');
+    const dl: { speaker: string; text: string; off: boolean }[] = [];
+    for (const u of mine.filter(u => u.kind === 'dlg')) { const last = dl[dl.length - 1]; if (last && u.cont && last.speaker === (u.speaker || '')) last.text += ' ' + u.text; else dl.push({ speaker: u.speaker || '', text: u.text, off: !!u.off }); }
+    return { ...c, src: c.src?.trim() ? c.src : src, dlg: c.dlg?.length ? c.dlg : dl };
+  });
 }
 /** 번호로 받은 답을 앱의 대본으로 채우기 */
 export function resolveNumbers(c: ParsedCut, scene: Scene): AICut {

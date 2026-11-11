@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 import type { WsProps } from './Workspace';
 import type { Project } from './types';
 import { applyAiCuts, autoSummary, cutValues, estimatePages, getCuts, getScenes, isAiScene, knownNames, mergeCuts, resetBreaks, sceneStats, splitAt, type Cut, type Scene } from './script';
-import { buildCharSheetRequest, buildDebateRequest, buildDebateSummaryRequest, DEBATE_NEXT, parseDebate, buildCutSplitRequest, buildFullCutSplitRequest, fullScriptText, buildNextRequest, parseBible, parseCutSplitAnswer, parseSetTables, resolveNumbers, scriptFileName } from './prompts';
+import { fillByOrder, buildCharSheetRequest, buildDebateRequest, buildDebateSummaryRequest, DEBATE_NEXT, parseDebate, buildCutSplitRequest, buildFullCutSplitRequest, fullScriptText, buildNextRequest, parseBible, parseCutSplitAnswer, parseSetTables, resolveNumbers, scriptFileName } from './prompts';
 import { copyText } from './util';
 import type { AICut } from './types';
 import { ANGLES, MOVES, SHOT_SIZES, termLabel } from './shots';
@@ -264,10 +264,9 @@ function AiSplitModal({ p, scene, scenes, names, onClose, onApply, onBible, from
       const mine = parsed.filter(c => c.scene === s.num || (scene && !c.scene));
       if (!mine.length) continue;
       let list = mine.map(c => resolveNumbers(c, s));
-      if (table && list.every(c => !c.dlg?.length)) {
-        // 표처럼 대사 칸이 없는 답: 씬의 대사를 마지막 컷에 붙임
-        const dl = sceneDialogues(s);
-        if (dl.length) list[list.length - 1] = { ...list[list.length - 1], dlg: dl };
+      if (mine.every(c => !c.srcNums?.length && !c.dlgNums?.length) && list.every(c => !c.dlg?.length)) {
+        // 대본·대사 번호 없이 컷만 온 답: 씬 대본을 컷 순서대로 나눠 담음 (컷 묘사·인물과 닮은 곳에)
+        list = fillByOrder(s, list);
       }
       // 씬 중간부터 온 답([12-6]…)이면 앞 컷들을 살려서 이어 붙임
       const start = Math.min(...mine.map(c => c.idx || 1));
