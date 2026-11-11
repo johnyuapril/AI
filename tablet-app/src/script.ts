@@ -123,9 +123,22 @@ export function splitSentences(t: string): string[] {
   return out;
 }
 
+/** 대사 줄로 읽혔지만 사실 지문인 문장 (한글 파일에서 "이름[탭]대사" 다음 줄 지문이 대사에 붙는 경우)
+ *  인물 이름을 3인칭으로 부르거나(중호가, 중호는 …), 이름으로 끝나거나(… 오르는 중호.), 지문 말투(~한다.)로 길게 끝나는 문장 */
+export function looksNarration(t: string, names: string[]): boolean {
+  const s = t.trim();
+  if (!s || /^["“'‘]/.test(s)) return false;
+  for (const n of names) {
+    if (!n || n.length < 2) continue;
+    if (new RegExp(n + '(가|는|이가|이는|를|을|의|에게|와|과|도|만|쪽)\\s').test(s + ' ') && /다[.]?$/.test(s)) return true;
+    if (new RegExp('\\s' + n + '[.!]?$').test(s)) return true;
+  }
+  return s.length >= 18 && /[가-힣](ㄴ다|는다|한다|된다|온다|간다|본다|선다|든다|난다|있다|없다|진다|린다|킨다|낸다|친다)\.$/.test(s) && !/[?!]/.test(s);
+}
 export function sceneUnits(scene: Scene): Unit[] {
   const units: Unit[] = [];
   const ls = scene.lines;
+  const names = [...new Set(ls.filter(l => l.t === 'character').map(l => speakerName(l.text)).filter(Boolean))];
   for (let i = 0; i < ls.length; i++) {
     const l = ls[i];
     if (l.t === 'action') {
@@ -142,7 +155,10 @@ export function sceneUnits(scene: Scene): Unit[] {
       for (; j < ls.length && (ls[j].t === 'dialogue' || ls[j].t === 'paren'); j++) {
         const d = ls[j];
         if (d.t === 'paren') { paren = d.text; continue; }
+        let narr = false;
         splitSentences(d.text).forEach((s, k) => {
+          // 첫 대사 뒤에 붙은 지문 문장은 지문으로 (그 뒤 문장도 지문)
+          if (!first && (narr || looksNarration(s, names))) { narr = true; units.push({ id: `${d.id}#${k}`, lineId: d.id, kind: 'action', text: s, sentStart: k === 0 }); return; }
           units.push({ id: `${d.id}#${k}`, lineId: d.id, kind: 'dlg', text: s, speaker, paren, cont: !first, off: off || !!(paren && /소리|V\.?O|O\.?S|전화|목소리/i.test(paren)), sentStart: k === 0 });
           first = false;
         });

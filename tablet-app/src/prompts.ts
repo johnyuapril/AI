@@ -398,7 +398,8 @@ export function buildFullCutSplitRequest(p: Project, scenes: Scene[], per = 3, r
       '[토론 결과 정리] 지금까지 이 대화에서 감독·작가·평론가가 나눈 토론(1부~6부)이 끝났어. 이제 그 토론을 근거로 감독이 씬바이씬 최종 콘티를 정리해 줘.',
       '- 토론에서 합의한 인물의 생김새·옷차림·몸짓·표정, 공간과 빛, 씬별 분위기, 6부에서 정한 씬별 컷 나누기와 샷 크기·앵글·카메라 움직임을 그대로 따라. 토론에서 다루지 못한 부분만 같은 원칙으로 채워. 토론에서 샷 크기만 정한 곳은, 토론에서 나온 해석을 근거로 샷 종류(OTS·리버스·POV 등)와 카메라 움직임까지 감독으로서 판단해서 채워.',
       '- 토론 내용을 요약하거나 다시 쓰지 말고, 아래 [답하는 형식]의 콘티로만 답해.',
-      ...(toFile ? ['- 콘티는 파일 만들기 기능으로 "콘티.txt" 파일에 씬 순서대로 이어 써. 중간에 멈추거나 묻지 말고 마지막 씬까지 모두, 뒤로 갈수록 줄이지 말고 같은 자세함으로. 다 쓰면 파일을 내려받을 수 있게 하고 대화창에는 "끝"이라고만 써.'] : []),
+      '- "화면"은 토론에서 나온 인물의 표정·몸짓·위치와 공간·빛을 살려 3~5문장으로: 카메라가 어디서 보는지, 화면 안 앞·뒤·왼쪽·오른쪽 배치, 인물마다 눈·입·손·어깨의 구체적인 움직임, 소품과 빛. 대본 지문을 다시 말하는 한 문장으로 끝내면 안 돼. 그건 콘티가 아니라 대본이야.',
+      ...(toFile ? [`- 한 번에 씬 ${per}개씩만 파일 만들기 기능으로 "콘티_S시작-끝.txt" 파일(예: 콘티_S1-${per}.txt)에 써. 씬이 많아도 한꺼번에 쓰지 마. 한꺼번에 쓰면 뒤로 갈수록 묘사가 짧아져. 다 쓰면 파일을 내려받을 수 있게 하고 대화창에는 "다음 파일은 '다음'"이라고만 써. 내가 "다음"이라고 하면 이어지는 씬 ${per}개를 새 파일에 같은 자세함으로. 마지막 씬까지 끝나면 "끝".`] : []),
       '',
     ] : []),
     ...DIRECTOR_RULES.map(r => r.replace(/씬 3개/g, `씬 ${per}개`)),
@@ -409,12 +410,12 @@ export function buildFullCutSplitRequest(p: Project, scenes: Scene[], per = 3, r
   if (p.debate?.trim()) parts.push('- [3인 토론 결론]의 인물 몸짓·표정·위치, 공간, [씬] 항목의 순간들을 컷 나누기와 "화면" 묘사에 빠짐없이 살려. [씬] 항목에 "컷 구성"이 있으면 그 컷 순서·샷 크기·앵글·움직임을 기본으로 따르고, 한 컷에 담기지 않는 것만 나눠서 보태. "화면"은 이때 3~5문장으로, 눈·입·손·어깨까지 구체적으로. 토론 기록 파일을 첨부했으면 그 대화의 세부도 참고해.');
   parts.push(...bibleBlock(p));
   if (looks.length) parts.push('', '[등장인물]', ...looks);
-  parts.push('', ...ANSWER_FORMAT(first), '', toFile ? `S#${first}부터 S#${inRange[inRange.length - 1] ?? to}까지 모든 씬을 "콘티.txt" 파일로 써 줘.` : `지금은 S#${first}부터 씬 ${Math.min(per, inRange.length || per)}개(S#${first}~S#${last})만 답해 줘.`);
+  parts.push('', ...ANSWER_FORMAT(first), '', toFile ? `지금은 S#${first}부터 씬 ${Math.min(per, inRange.length || per)}개(S#${first}~S#${last})만 "콘티_S${first}-${last}.txt" 파일로 써 줘.` : `지금은 S#${first}부터 씬 ${Math.min(per, inRange.length || per)}개(S#${first}~S#${last})만 답해 줘.`);
   return parts.join('\n');
 }
 /** 이어 받기 요청 (마지막으로 넣은 컷 다음부터 씬 per개, until 씬까지만) */
-export function buildNextRequest(scene: number, cut: number, per: number, until?: number): string {
-  return `다음. 지난 답은 [${scene}-${cut}]까지 받았어. S#${scene}가 그 컷에서 끝났으면 다음 씬의 설정표와 첫 컷부터, 아직 안 끝났으면 [${scene}-${cut + 1}]부터 이어서, 씬 ${per}개 분량을 앞과 같은 형식, 같은 자세함으로 답해 줘.${until ? ` S#${until}까지만 하고, 거기서 끝나면 "끝"이라고 써.` : ''} 감독으로서 컷마다 충분히 검토해서, 초벌·요약 말고 최종 콘티 수준으로.`;
+export function buildNextRequest(scene: number, cut: number, per: number, until?: number, toFile = false): string {
+  return `다음.${toFile ? ` 이번 분량은 새 파일 "콘티_S시작-끝.txt"로 써 줘.` : ''} 지난 답은 [${scene}-${cut}]까지 받았어. S#${scene}가 그 컷에서 끝났으면 다음 씬의 설정표와 첫 컷부터, 아직 안 끝났으면 [${scene}-${cut + 1}]부터 이어서, 씬 ${per}개 분량을 앞과 같은 형식, 같은 자세함으로 답해 줘.${until ? ` S#${until}까지만 하고, 거기서 끝나면 "끝"이라고 써.` : ''} 감독으로서 컷마다 충분히 검토해서, 초벌·요약 말고 최종 콘티 수준으로.`;
 }
 
 const stripMd = (s: string) => s.replace(/\*\*|__|`/g, '').replace(/^\s*[-*•]\s+/, '').trim();
