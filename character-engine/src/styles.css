@@ -96,3 +96,7 @@ details summary { cursor: pointer; color: var(--muted); font-size: 14px; }
 .org > button { align-self: flex-start; }
 @media (max-width: 760px) { .org { padding: 8px 12px 0; } }
 .script { font-family: "Noto Sans KR", monospace; line-height: 1.75; min-height: 420px; }
+.scene { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+.scene.now { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.scene.done { background: var(--soft); }
+.scene .state { display: flex; flex-direction: column; gap: 6px; padding: 8px 0; border-top: 1px solid var(--line); }

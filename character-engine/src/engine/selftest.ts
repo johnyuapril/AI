@@ -102,3 +102,60 @@ import { cleanScript, screenplayManualPrompt } from './screenplay';
   assert.equal(cleanScript('여기요\n```text\nS#1. 사무실 - 낮\n\\*\\*정훈\\*\\* : 응\n```'), 'S#1. 사무실 - 낮\n정훈 : 응');
   console.log('시나리오 쓰기 시험 통과');
 }
+
+// ---- 장면 단위로 이어 쓰기 ----
+import { carriedStates, parseSceneAnswer, removeTail, sceneManualPrompt, applyStatesToChars, type ScriptScene } from './sequence';
+{
+  const mi: Character = { ...base, id: 'b', name: '미선', relations: [{ otherId: 'a', label: '아내', feeling: '믿는다' }] };
+  const jh: Character = { ...base, relations: [{ otherId: 'b', label: '남편', feeling: '미안함' }] };
+  const chars = [jh, mi];
+  const e1: StoryEvent = { id: 'e1', title: '구조조정', what: '명단에 올랐다', whenWhere: '금요일, 사무실', participants: ['a'], knowledge: {}, span: 'now', decisive: false, createdAt: 0 };
+  const e2: StoryEvent = { ...e1, id: 'e2', title: '통장', what: '아내가 잔고를 본다', participants: ['b', 'a'] };
+  const e3: StoryEvent = { ...e1, id: 'e3', title: '저녁', what: '말없이 밥을 먹는다', participants: ['a', 'b'] };
+
+  // 답 읽기: 시나리오와 상태 JSON 을 나누고, JSON 은 글에 남지 않음 (마크다운 이스케이프 포함)
+  const ans = '네, 썼어요.\n```text\nS#4. 주차장 - 밤\n정훈이 차 안에 앉아 있다.\n정훈 : 늦었지?\n```\n```json\n{"states":[{"name":"정훈","mood":"불안, 숨기고 있다","relations":[{"other":"미선","feeling":"들킬까 봐 피한다"},{"other":"처남","feeling":"?"}],"change":"명단 소식을 숨김"},{"name":"없는사람","mood":"x"}]}\n```';
+  const r = parseSceneAnswer(ans, chars);
+  assert.equal(r.text, 'S#4. 주차장 - 밤\n정훈이 차 안에 앉아 있다.\n정훈 : 늦었지?');
+  assert.ok(!r.text.includes('states'));
+  assert.equal(r.after.length, 1);
+  assert.deepEqual(r.after[0].relations, [{ otherId: 'b', feeling: '들킬까 봐 피한다' }]);
+  // 코드 블록 없이 붙여넣어도
+  const r2 = parseSceneAnswer('S#5. 부엌 - 아침\n미선 : 이게 뭐야?\n\n{"states":[{"name":"미선","mood":"화남","relations":[{"other":"정훈","feeling":"배신감"}],"change":"잔고를 봄"}]}', chars);
+  assert.equal(r2.text, 'S#5. 부엌 - 아침\n미선 : 이게 뭐야?');
+  assert.equal(r2.after[0].charId, 'b');
+
+  // 상태가 다음 장면으로 넘어가고, 뒤 장면 상태가 앞 장면을 덮어씀
+  const scenes: ScriptScene[] = [
+    { id: 's1', eventIds: ['e1'], note: '', text: r.text, after: r.after },
+    { id: 's2', eventIds: ['e2'], note: '', text: r2.text, after: r2.after },
+    { id: 's3', eventIds: ['e3'], note: '대사 없이', },
+  ];
+  const c3 = carriedStates(scenes, 2);
+  assert.equal(c3.get('a')?.mood, '불안, 숨기고 있다');
+  assert.equal(c3.get('b')?.mood, '화남');
+  assert.equal(carriedStates(scenes, 0).size, 0);
+
+  const p = sceneManualPrompt({ world: { era: '', rules: '', limits: '', groups: '' }, chars, events: [e1, e2, e3], reactions: [], threshold: 6, extraRules: [], scenes, index: 2, direction: '건조하게', startScene: 6 });
+  assert.ok(p.includes('S#6'));
+  assert.ok(p.includes('배신감'));                    // 앞 장면에서 바뀐 관계 감정
+  assert.ok(p.includes('감정과 컨디션: 화남'));       // 인물 설명의 현재 상태가 이어진 상태로
+  assert.ok(!p.includes('(믿는다)'));                 // 옛 관계 감정은 덮어씀
+  assert.ok(p.includes('부엌 - 아침'));               // 바로 앞 장면 글
+  assert.ok(p.includes('대사 없이') && p.includes('건조하게'));
+  assert.ok(p.includes('말없이 밥을 먹는다') && !p.includes('3. 저녁') && p.includes('1. 저녁')); // 이번 장면 사건만
+  assert.ok(p.includes('"states"'));
+
+  // 다시 쓰기: 끝에 붙은 장면 글만 뺀다. 직접 고쳐서 못 찾으면 null
+  const script = `S#1. 집 - 낮\n지문\n\n${r.text}`;
+  assert.equal(removeTail(script + '\n', r.text), 'S#1. 집 - 낮\n지문');
+  assert.equal(removeTail(script + '\n고친 줄', r.text), null);
+
+  // 인물 설정에 반영
+  const applied = applyStatesToChars(chars, c3);
+  assert.equal(applied[1].state.mood, '화남');
+  assert.equal(applied[1].relations[0].feeling, '배신감');
+  assert.equal(applied[1].relations[0].label, '아내');
+  assert.ok(applied[1].state.memories.includes('잔고를 봄'));
+  console.log('장면 이어 쓰기 시험 통과');
+}
