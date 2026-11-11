@@ -56,26 +56,43 @@ function openAiSide(url) {
   ai.webContents.setWindowOpenHandler(({ url: u }) => {
     // 로그인 팝업(구글 등)은 같은 창 묶음 안에서 열어야 로그인이 이어짐
     if (/accounts\.google|appleid|login\.microsoftonline|auth/i.test(u)) return { action: 'allow', overrideBrowserWindowOptions: { webPreferences: { partition: 'persist:ai' } } };
+    // 파일 받기(blob·data 주소, AI 사이트의 다운로드 주소)는 바깥 브라우저로 보내지 말고 여기서 받기
+    let sameSite = false; try { sameSite = new URL(u).hostname.replace(/^www\./, '') === new URL(ai.webContents.getURL()).hostname.replace(/^www\./, ''); } catch { /* */ }
+    if (/^(blob|data):/i.test(u) || (sameSite && /download|\/files?\/|\/attachments?\//i.test(u))) { ai.webContents.downloadURL(u); return { action: 'deny' }; }
     shell.openExternal(u); return { action: 'deny' };
   });
   ai.on('closed', () => { ai = null; if (main) main.maximize(); });
   ai.loadURL(url || 'https://chatgpt.com');
 }
 
-/** AI 창에서 받은 그림은 문서/시나리오작업실/받은 그림 에 저장 */
+/** AI 창에서 받은 파일: 그림은 문서/시나리오작업실/받은 그림, 글 파일(콘티.txt 등)은 받은 파일 에 저장하고 앱에 알림 */
+const TEXT_EXT = /\.(txt|md|markdown|json|csv|fountain)$/i;
 function watchDownloads() {
-  const { session } = require('electron');
+  const { session, Notification } = require('electron');
   session.fromPartition('persist:ai').setUserAgent(CHROME_UA());
   session.fromPartition('persist:ai').on('will-download', (_e, item) => {
-    const dir = path.join(SAVE_DIR(), '받은 그림');
+    let name = (item.getFilename() || 'file').replace(/[\\/:*?"<>|]/g, '_');
+    const mime = item.getMimeType() || '';
+    if (!/\.[a-z0-9]{1,8}$/i.test(name)) name += /^image\//.test(mime) ? '.png' : /markdown/.test(mime) ? '.md' : /^text\//.test(mime) ? '.txt' : '';
+    const isText = TEXT_EXT.test(name) || /^text\//.test(mime);
+    const dir = path.join(SAVE_DIR(), isText ? '받은 파일' : '받은 그림');
     fs.mkdirSync(dir, { recursive: true });
-    let name = item.getFilename() || 'image.png';
     let p = path.join(dir, name);
     for (let i = 2; fs.existsSync(p); i++) p = path.join(dir, name.replace(/(\.[^.]*)?$/, ` (${i})$1`));
     item.setSavePath(p);
-    item.once('done', (_ev, state) => { if (state === 'completed' && main) main.webContents.send('ai-downloaded', p); });
+    item.once('done', (_ev, state) => {
+      if (state !== 'completed') return;
+      if (main && !main.isDestroyed()) main.webContents.send('ai-downloaded', p);
+      try { if (Notification.isSupported()) new Notification({ title: '파일 받음', body: path.basename(p) + ' → ' + path.basename(dir) + ' 폴더' }).show(); } catch { /* */ }
+    });
   });
 }
+// 받은 글 파일 읽기 (저장 폴더 안의 파일만)
+ipcMain.handle('desktop:readText', (_e, { path: p }) => {
+  const full = path.resolve(p);
+  if (!full.startsWith(path.resolve(SAVE_DIR()))) return '';
+  try { return fs.readFileSync(full, 'utf8'); } catch { return ''; }
+});
 
 function uniquePath(dir, name) {
   const safe = name.replace(/[\\/:*?"<>|]/g, '_');

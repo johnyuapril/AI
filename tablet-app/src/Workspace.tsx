@@ -12,7 +12,7 @@ import AnalysisTab from './AnalysisTab';
 import { Modal, useToast } from './ui';
 import { importFile, toFountain } from './importer';
 import { exportProject } from './backup';
-import { isDesktop, openAiSide, AI_APPS, preferredAi, setPreferredAi, pickFiles, saveFile } from './native';
+import { onAiDownload, isDesktop, openAiSide, AI_APPS, preferredAi, setPreferredAi, pickFiles, saveFile } from './native';
 import { exportScriptPdf } from './pdf';
 import { getLinks, syncProject } from './gsync';
 import { openExternal } from './update';
@@ -31,6 +31,7 @@ export default function Workspace({ id, onClose, settings, setSettings }: { id: 
   const [menu, setMenu] = useState(false);
   const [busy, setBusy] = useState('');
   const toast = useToast();
+  useEffect(() => onAiDownload(p => toast('AI 창에서 받았어요: ' + p.split(/[\\/]/).pop() + (/\.(txt|md)$/i.test(p) ? ' (토론 결과 받기 창의 "AI 창에서 받은 파일 넣기"로 넣어요)' : ''))), [toast]);
   const saveTimer = useRef<number>();
   const latest = useRef<Project | null>(null);
   const settingsRef = useRef(settings); settingsRef.current = settings;

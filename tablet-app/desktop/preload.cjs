@@ -16,5 +16,6 @@ contextBridge.exposeInMainWorld('desktop', {
   comfyGetModel: (exe, url, name) => call('comfyGetModel', { exe, url, name }),
   onComfyDl: cb => ipcRenderer.on('comfy-dl', (_e, p) => cb(p)),
   installUpdate: url => call('installUpdate', { url }),
+  readText: p => call('readText', { path: p }),
   onAiDownloaded: cb => ipcRenderer.on('ai-downloaded', (_e, p) => cb(p)),
 });

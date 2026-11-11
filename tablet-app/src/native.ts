@@ -22,8 +22,14 @@ export interface DesktopBridge {
   /** 예전 윈도우 앱에는 없을 수 있음 */
   fetchBin?(o: { url: string; method?: string; headers?: Record<string, string>; body?: Uint8Array | string }): Promise<{ status: number; type: string; data: Uint8Array }>;
   onAiDownloaded(cb: (path: string) => void): void;
+  readText?(path: string): Promise<string>;
 }
 export const desktop: DesktopBridge | undefined = (globalThis as any).desktop;
+/** 윈도우 AI 옆 창에서 이번에 받은 글 파일들 (콘티_S1-3.txt 등) */
+export const aiDownloads: string[] = [];
+const dlListeners = new Set<(p: string) => void>();
+export function onAiDownload(cb: (p: string) => void) { dlListeners.add(cb); return () => { dlListeners.delete(cb); }; }
+try { desktop?.onAiDownloaded(p => { if (/\.(txt|md|markdown|json|csv|fountain)$/i.test(p)) aiDownloads.push(p); dlListeners.forEach(f => f(p)); }); } catch { /* */ }
 /** 윈도우용 앱에서 실행 중인지 */
 export const isDesktop = () => !!desktop;
 /** 지금 플랫폼: 'android' | 'windows' | 'web' */
