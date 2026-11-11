@@ -5,6 +5,7 @@ import type { Book } from './store';
 import { askText, AiError } from './engine/ai';
 import { WRITER, cleanScript, screenplayManualPrompt, screenplayPrompt, scriptBlob, type ScriptInput } from './engine/screenplay';
 import { ConfirmButton, copyText, download } from './ui';
+import { AiStatus, keyMissing, useAiTask } from './AiRun';
 
 export default function ScriptTab({ book, setBook, settings }: { book: Book; setBook: (f: (b: Book) => Book) => void; settings: Settings }) {
   const ready = book.events.filter(e => e.what.trim() && e.participants.length);
@@ -12,7 +13,7 @@ export default function ScriptTab({ book, setBook, settings }: { book: Book; set
   const [direction, setDirection] = useState('');
   const [append, setAppend] = useState(false);
   const [answer, setAnswer] = useState('');
-  const [busy, setBusy] = useState(false);
+  const task = useAiTask();
   const [copied, setCopied] = useState('');
   const [err, setErr] = useState('');
   const text = book.script ?? '';
@@ -27,9 +28,12 @@ export default function ScriptTab({ book, setBook, settings }: { book: Book; set
     if (!b) throw new AiError('AI 답에서 시나리오를 찾지 못했어요.');
     setBook(x => ({ ...x, script: append && x.script ? `${x.script.trim()}\n\n${b}` : b }));
   };
-  const runApi = async () => {
-    setBusy(true); setErr('');
-    try { put(await askText(settings.apiKey, settings.model, WRITER, screenplayPrompt(input()))); } catch (e: any) { setErr(e.message ?? String(e)); } finally { setBusy(false); }
+  const runApi = () => {
+    setErr('');
+    return task.run(async (o, stage) => {
+      stage(`시나리오 쓰는 중 (사건 ${picked.length}개, 몇 분 걸릴 수 있어요)`);
+      put(await askText(settings.apiKey, settings.model, WRITER, screenplayPrompt(input()), o));
+    });
   };
   const flash = (k: string) => { setCopied(k); setTimeout(() => setCopied(''), 1500); };
   const noReact = book.events.filter(e => picked.includes(e.id) && !book.reactions.some(r => r.eventId === e.id)).length;
@@ -56,7 +60,10 @@ export default function ScriptTab({ book, setBook, settings }: { book: Book; set
           <textarea rows={2} value={direction} placeholder="예: 대사는 적게, 건조한 톤으로. 마지막 씬은 아침 식탁." onChange={e => setDirection(e.target.value)} /></label>
         {text && <label className="row small-t"><input type="checkbox" checked={append} onChange={e => setAppend(e.target.checked)} /> 지금 글 뒤에 이어 붙이기 (S#{lastScene() + 1}부터)</label>}
         {settings.mode === 'api' ? (
-          <div className="row"><button className="accent" disabled={!picked.length || busy} onClick={runApi}>{busy ? '쓰는 중… (몇 분 걸릴 수 있어요)' : '시나리오 쓰기'}</button></div>
+          <>
+            <div className="row"><button className="accent" disabled={!picked.length || task.busy || keyMissing(settings)} onClick={runApi}>{task.busy ? '쓰는 중…' : text && !append ? '시나리오 다시 쓰기 (지금 글을 바꿔요)' : '시나리오 쓰기'}</button></div>
+            <AiStatus task={task} onRetry={runApi} settings={settings} />
+          </>
         ) : (
           <>
             <div className="row">

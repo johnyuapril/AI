@@ -3,6 +3,7 @@ import type { Character, Settings, World } from './engine/types';
 import { DIR_LABEL, ROOT_FIELDS, ROOT_LABEL } from './engine/types';
 import { stageOf } from './engine/change';
 import { checkArc, type ArcCheck } from './engine/pipeline';
+import { AiStatus, keyMissing, useAiTask } from './AiRun';
 import { arcPrompt } from './engine/prompts';
 import { ConfirmButton, Field, LinesField, copyText } from './ui';
 import { newCharacter } from './store';
@@ -57,14 +58,10 @@ export default function CharactersTab({ chars, world, settings, onChange }: { ch
 function Editor({ c, chars, world, settings, put, onBack, onDelete }: { c: Character; chars: Character[]; world: World; settings: Settings; put: (c: Character) => void; onBack: () => void; onDelete: () => void }) {
   const others = chars.filter(x => x.id !== c.id);
   const [arc, setArc] = useState<ArcCheck | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState('');
+  const task = useAiTask();
   const [copied, setCopied] = useState(false);
 
-  const runArc = async () => {
-    setBusy(true); setErr('');
-    try { setArc(await checkArc(settings, world, c, chars)); } catch (e: any) { setErr(e.message); } finally { setBusy(false); }
-  };
+  const runArc = () => task.run(async (o, stage) => { stage('아크 점검 중'); setArc(await checkArc(settings, world, c, chars, o)); });
 
   return (
     <>
@@ -113,11 +110,11 @@ function Editor({ c, chars, world, settings, put, onBack, onDelete }: { c: Chara
         {c.arcGoal.trim() && (
           <div className="row">
             {settings.mode === 'api'
-              ? <button onClick={runArc} disabled={busy}>{busy ? '점검 중…' : '지금까지의 사건으로 정당화되나 점검'}</button>
+              ? <button onClick={runArc} disabled={task.busy || keyMissing(settings)}>{task.busy ? '점검 중…' : '지금까지의 사건으로 정당화되나 점검'}</button>
               : <button onClick={async () => { setCopied(await copyText(arcPrompt(world, c, chars, settings.threshold))); }}>{copied ? '복사했어요. 외부 AI에 붙여넣으세요' : '아크 점검 요청 복사'}</button>}
           </div>
         )}
-        {err && <div className="err">{err}</div>}
+        {settings.mode === 'api' && c.arcGoal.trim() && <AiStatus task={task} onRetry={runArc} settings={settings} />}
         {arc && (
           <div className="proposal">
             <b className={arc.justified ? 'ok' : 'bad'}>{arc.justified ? '지금 바뀌어도 자연스러워요' : '아직 이 사람은 안 바뀌어요'}</b>

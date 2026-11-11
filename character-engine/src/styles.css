@@ -96,3 +96,9 @@ details summary { cursor: pointer; color: var(--muted); font-size: 14px; }
 .org > button { align-self: flex-start; }
 @media (max-width: 760px) { .org { padding: 8px 12px 0; } }
 .script { font-family: "Noto Sans KR", monospace; line-height: 1.75; min-height: 420px; }
+/* AI 바로 부르기: 로딩 줄과 오류 상자 (AiRun.tsx) */
+.ai-status { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; background: var(--soft, #f3f1ec); font-size: 14px; }
+.ai-err { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--danger); color: var(--danger); font-size: 14px; white-space: pre-wrap; }
+.spinner { width: 16px; height: 16px; flex: none; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; animation: ai-spin .8s linear infinite; opacity: .7; }
+@keyframes ai-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2.4s; } }

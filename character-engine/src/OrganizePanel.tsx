@@ -4,6 +4,7 @@ import type { Settings } from './engine/types';
 import { ORG_SCHEMA, organizeManualPrompt, organizePrompt, type OrganizeKind } from './engine/organize';
 import { askJson, extractJson } from './engine/ai';
 import { copyText } from './ui';
+import { AiStatus, keyMissing, useAiTask } from './AiRun';
 
 const TITLE: Record<OrganizeKind, string> = { chars: '인물', world: '배경', events: '사건' };
 const EXAMPLE: Record<OrganizeKind, string> = {
@@ -21,16 +22,18 @@ export default function OrganizePanel({ kind, settings, known, onApply }: {
   const [answer, setAnswer] = useState('');
   const [fillGaps, setFillGaps] = useState(false);
   const [keep, setKeep] = useState(true);
-  const [busy, setBusy] = useState(false);
+  const task = useAiTask();
   const [copied, setCopied] = useState(false);
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
 
   const apply = (raw: unknown) => { setMsg(onApply(raw, keep)); setAnswer(''); };
-  const runApi = async () => {
-    setBusy(true); setErr(''); setMsg('');
-    try { apply(await askJson(settings.apiKey, settings.model, '너는 시나리오 기획 메모를 정리하는 조수다.', organizePrompt(kind, notes, fillGaps, known), ORG_SCHEMA[kind])); }
-    catch (e: any) { setErr(e.message ?? String(e)); } finally { setBusy(false); }
+  const runApi = () => {
+    setErr(''); setMsg('');
+    return task.run(async (o, stage) => {
+      stage(`${TITLE[kind]} 정리하는 중`);
+      apply(await askJson(settings.apiKey, settings.model, '너는 시나리오 기획 메모를 정리하는 조수다.', organizePrompt(kind, notes, fillGaps, known), ORG_SCHEMA[kind], o));
+    });
   };
   const pasteIn = () => {
     setErr(''); setMsg('');
@@ -49,7 +52,10 @@ export default function OrganizePanel({ kind, settings, known, onApply }: {
           <label className="row"><input type="checkbox" checked={fillGaps} onChange={e => { setFillGaps(e.target.checked); setCopied(false); }} /> 글에 없는 칸도 AI가 어울리게 채우기</label>
         </div>
         {settings.mode === 'api' ? (
-          <div className="row"><button className="accent" disabled={!notes.trim() || busy} onClick={runApi}>{busy ? '정리하는 중…' : 'AI로 정리해서 채우기'}</button></div>
+          <>
+            <div className="row"><button className="accent" disabled={!notes.trim() || task.busy || keyMissing(settings)} onClick={runApi}>{task.busy ? '정리하는 중…' : 'AI로 정리해서 채우기'}</button></div>
+            <AiStatus task={task} onRetry={runApi} settings={settings} />
+          </>
         ) : (
           <>
             <div className="row">
