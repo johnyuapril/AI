@@ -19,9 +19,10 @@ npm run build   # dist/ 에 웹앱
   - `pipeline.ts` 사건 돌리기: 인물마다 반응 → 검수 → 걸리면 한 번 다시 → 상태와 압력 반영. 뒤 인물은 앞 인물의 행동과 말만 본다(속마음은 모름)
   - `organize.ts` 작가가 붙여넣은 글을 인물/배경/사건 항목으로 정리하는 요청과 합치기
   - `screenplay.ts` 설정·사건·반응으로 시나리오 형식 글을 쓰는 요청 (작업실 .txt 형식)
+  - `sequence.ts` 장면 단위로 이어 쓰기: 사건을 장면 묶음으로 나눠 한 장면씩 쓰고, 장면이 끝났을 때 인물 상태(감정, 관계 감정, 달라진 것)를 받아 다음 장면 요청에 넘김
   - `ai.ts` Claude API 호출(구조화된 출력, 거절 시 서버 쪽 대체 모델), 붙여넣은 답에서 JSON 꺼내기
 - `src/store.ts` 저장(idb-keyval), `src/importer.ts` 작업실 .sbk 에서 인물 가져오기
-- 화면: `App.tsx`(탭, 배경, 설정), `CharactersTab.tsx`, `EventsTab.tsx`, `ReactionCard.tsx`, `ScriptTab.tsx`, `OrganizePanel.tsx`(탭마다 AI로 채우기)
+- 화면: `App.tsx`(탭, 배경, 설정), `CharactersTab.tsx`, `EventsTab.tsx`, `ReactionCard.tsx`, `ScriptTab.tsx`(한 번에 쓰기 / 장면 단위로 이어 쓰기), `SceneFlow.tsx`, `OrganizePanel.tsx`(탭마다 AI로 채우기)
 
 ## AI 쓰는 방식 (설정 탭)
 - 복사 → 붙여넣기 (기본): 작업실처럼 요청을 복사해 외부 AI에 붙여넣고 답을 붙여넣는다. 요금 없음. 반응과 자체 점검을 한 번에 받는다.
