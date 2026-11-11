@@ -5,7 +5,8 @@ import { newCharacter, uid } from './store';
 import OrganizePanel from './OrganizePanel';
 import { mergeEvents } from './engine/organize';
 import { acceptProposal } from './engine/change';
-import { commit, runEvent, seenOf, toReaction } from './engine/pipeline';
+import { commit, resumeOf, runEvent, seenOf, toReaction } from './engine/pipeline';
+import { AiStatus, keyMissing, useAiTask } from './AiRun';
 import { manualPrompt } from './engine/prompts';
 import { extractJson } from './engine/ai';
 import ReactionCard from './ReactionCard';
@@ -54,7 +55,8 @@ export default function EventsTab({ book, setBook, settings, setSettings }: { bo
 function EventEditor({ ev, book, setBook, put, settings, setSettings, onBack, onDelete }: {
   ev: StoryEvent; book: Book; setBook: (f: (b: Book) => Book) => void; put: (e: StoryEvent) => void; settings: Settings; setSettings: (s: Settings) => void; onBack: () => void; onDelete: () => void;
 }) {
-  const [busy, setBusy] = useState('');
+  const task = useAiTask();
+  const busy = task.busy;
   const [err, setErr] = useState('');
   // 붙여넣기 방식 진행 상태: 이번에 돌린 반응 id 들, 지금 차례
   const [manual, setManual] = useState<{ step: number; ids: string[] } | null>(null);
@@ -72,12 +74,17 @@ function EventEditor({ ev, book, setBook, put, settings, setSettings, onBack, on
     undo: b.undo ? { ...b.undo, reactionIds: [...b.undo.reactionIds, r.id] } : b.undo,
   });
 
-  const runApi = async () => {
-    setErr(''); setBusy('시작하는 중');
+  const runApi = () => {
+    setErr('');
     setBook(startSnapshot);
-    try {
-      await runEvent(settings, book.world, book.chars, ev, setBusy, res => setBook(b => record(b, res.char, res.reaction)));
-    } catch (e: any) { setErr(e.message ?? String(e)); } finally { setBusy(''); }
+    return task.run((o, stage) => runEvent(settings, book.world, book.chars, ev, stage, res => setBook(b => record(b, res.char, res.reaction)), o));
+  };
+  // 실패하거나 멈춘 뒤 '다시 시도': 이번에 이미 끝난 인물은 두고, 걸린 인물부터 이어서 돌린다
+  const thisRun = book.undo?.eventId === ev.id ? book.reactions.filter(r => book.undo!.reactionIds.includes(r.id)) : [];
+  const resumeApi = () => {
+    const resume = resumeOf(ev, book.chars, thisRun);
+    if (!thisRun.length || ev.participants.every(id => resume.doneIds.includes(id) || !charOf(id))) return runApi();
+    return task.run((o, stage) => runEvent(settings, book.world, book.chars, ev, stage, res => setBook(b => record(b, res.char, res.reaction)), o, resume));
   };
 
   const manualCtx = (step: number) => {
@@ -134,11 +141,14 @@ function EventEditor({ ev, book, setBook, put, settings, setSettings, onBack, on
         </div>
         <div className="row">
           {settings.mode === 'api'
-            ? <button className="accent" disabled={!canRun || !!busy} onClick={runApi}>{busy ? '돌리는 중…' : '사건 돌리기'}</button>
+            ? <button className="accent" disabled={!canRun || busy || keyMissing(settings)} onClick={runApi}>{busy ? '돌리는 중…' : '사건 돌리기'}</button>
             : <button className="accent" disabled={!canRun || !!manual} onClick={() => { setBook(startSnapshot); setManual({ step: 0, ids: [] }); setErr(''); }}>사건 돌리기 (복사 → 붙여넣기)</button>}
           {book.undo?.eventId === ev.id && book.undo.reactionIds.length > 0 && !busy && !manual && <button className="small" onClick={undo}>마지막으로 돌린 것 되돌리기</button>}
           {!canRun && <span className="muted small-t">사실과 겪는 인물을 정하면 돌릴 수 있어요.</span>}
         </div>
+        {settings.mode === 'api' && <AiStatus task={task} settings={settings} idle="시작하는 중"
+          onRetry={resumeApi} />}
+        {settings.mode === 'api' && task.err && thisRun.length > 0 && thisRun.length < ev.participants.length && <div className="muted small-t">끝난 인물 {thisRun.length}명의 반응은 남겨 두고, 다음 인물부터 이어서 돌려요.</div>}
         {err && <div className="err">{err}</div>}
       </div>
 
@@ -165,7 +175,6 @@ function EventEditor({ ev, book, setBook, put, settings, setSettings, onBack, on
           onReject={() => setReaction(r.id, x => ({ ...x, proposal: x.proposal && { ...x.proposal, status: 'rejected' } }))}
           onAwkward={why => { setReaction(r.id, x => ({ ...x, flaggedAwkward: why })); setSettings({ ...settings, extraRules: [...settings.extraRules, why] }); }} />
       ))}
-      {busy && <div className="status">{busy}</div>}
     </>
   );
 }
