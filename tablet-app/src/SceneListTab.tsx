@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 import type { WsProps } from './Workspace';
 import type { Project } from './types';
 import { applyAiCuts, autoSummary, cutValues, estimatePages, getCuts, getScenes, isAiScene, knownNames, mergeCuts, resetBreaks, sceneStats, splitAt, type Cut, type Scene } from './script';
-import { fillByOrder, buildCharSheetRequest, buildDebateRequest, buildDebateSummaryRequest, DEBATE_NEXT, parseDebate, buildCutSplitRequest, buildFullCutSplitRequest, fullScriptText, buildNextRequest, parseBible, parseCutSplitAnswer, parseSetTables, resolveNumbers, scriptFileName } from './prompts';
+import { fillByContent, numbersOff, fillByOrder, buildCharSheetRequest, buildDebateRequest, buildDebateSummaryRequest, DEBATE_NEXT, parseDebate, buildCutSplitRequest, buildFullCutSplitRequest, fullScriptText, buildNextRequest, parseBible, parseCutSplitAnswer, parseSetTables, resolveNumbers, scriptFileName } from './prompts';
 import { copyText } from './util';
 import type { AICut } from './types';
 import { ANGLES, MOVES, SHOT_SIZES, termLabel } from './shots';
@@ -257,14 +257,19 @@ function AiSplitModal({ p, scene, scenes, names, onClose, onApply, onBible, from
   const [done, setDone] = useState<number[]>([]);
   const parsed = useMemo(() => text.trim() ? parseCutSplitAnswer(text, names) : [], [text, names]);
   const sets = useMemo(() => text.trim() ? parseSetTables(text) : {}, [text]);
+  const [ignoreNums, setIgnoreNums] = useState(false);
+  const offScenes: number[] = [];
   const groups = useMemo(() => {
+    offScenes.length = 0;
     const out: [Scene, AICut[], string?, number?][] = [];
     const table = parsed.every(c => c.dlgNums === undefined);
     for (const s of scene ? [scene] : scenes) {
       const mine = parsed.filter(c => c.scene === s.num || (scene && !c.scene));
       if (!mine.length) continue;
-      let list = mine.map(c => resolveNumbers(c, s));
-      if (mine.every(c => !c.srcNums?.length && !c.dlgNums?.length) && list.every(c => !c.dlg?.length)) {
+      const off = ignoreNums || numbersOff(s, mine);
+      if (off) offScenes.push(s.num);
+      let list = off ? fillByContent(s, mine) : mine.map(c => resolveNumbers(c, s));
+      if (!off && mine.every(c => !c.srcNums?.length && !c.dlgNums?.length) && list.every(c => !c.dlg?.length)) {
         // 대본·대사 번호 없이 컷만 온 답: 씬 대본을 컷 순서대로 나눠 담음 (컷 묘사·인물과 닮은 곳에)
         list = fillByOrder(s, list);
       }
@@ -276,7 +281,7 @@ function AiSplitModal({ p, scene, scenes, names, onClose, onApply, onBible, from
       out.push([s, list, sets[s.num] || (scene ? sets[-1] : undefined), keep]);
     }
     return out;
-  }, [parsed, sets, scene, scenes, p.scenes]);
+  }, [parsed, sets, scene, scenes, p.scenes, ignoreNums]);
   const lastCut = useMemo(() => { const l = parsed[parsed.length - 1]; return l ? { scene: l.scene || scene?.num || 0, cut: l.idx || 0 } : null; }, [parsed, scene]);
   const [next, setNext] = useState<{ scene: number; cut: number } | null>(null);
   const total = groups.reduce((a, g) => a + g[1].length, 0);
@@ -337,6 +342,10 @@ function AiSplitModal({ p, scene, scenes, names, onClose, onApply, onBible, from
       </div>
       <div className="row"><b>3.</b> <button onClick={paste}>AI 답 붙여넣기</button><button onClick={loadFile}>답 파일 불러오기</button><span className="muted small-t">또는 아래 칸에 직접 붙여넣기 (표로 답해도 돼요)</span></div>
       <textarea value={text} onChange={e => setText(e.target.value)} rows={10} style={{ width: '100%', fontSize: 14 }} placeholder={`[${scene?.num ?? 1}-1] EWS / 하이앵글 / 고정\n대본 번호: 1\n화면: …\n인물: 없음\n대사 번호: 없음`} />
+      {text.trim() && total > 0 && <div className="row small-t">
+        <label className="row" style={{ gap: 4 }}><input type="checkbox" checked={ignoreNums} onChange={e => setIgnoreNums(e.target.checked)} /> 대본 번호 무시하고 내용으로 맞추기</label>
+        {offScenes.length > 0 && <span style={{ color: 'var(--accent)' }}>{ignoreNums ? '' : `S#${offScenes.slice(0, 8).join(', S#')}${offScenes.length > 8 ? ' …' : ''}: 번호가 앱 파일과 안 맞아서(한글 원본에 번호를 따로 센 듯) 내용으로 맞췄어요. `}다음부터는 앱의 "시나리오 파일 보내기" 파일을 첨부해 주세요.</span>}
+      </div>}
       {text.trim() && <div className="small-t">{total ? <>읽은 결과: {groups.map(g => `S#${g[0].num} ${g[1].length}컷${g[2] ? '+설정표' : ''}`).join(', ').slice(0, 400)}</> : <span style={{ color: 'var(--accent)' }}>컷을 찾지 못했어요. [1-1] 같은 컷 번호가 있는지 확인해 주세요.</span>}</div>}
       {next && <div className="row small-t" style={{ background: 'var(--accent-soft)', padding: 8, borderRadius: 8 }}>
         <span>{!scene && `넣은 씬 ${done.length}개 / 전체 ${scenes.length}개 · `}마지막으로 넣은 컷: <b>{next.scene}-{next.cut}</b></span>

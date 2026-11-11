@@ -564,11 +564,11 @@ function nums(v: string): number[] {
 /** 번호 없이 컷만 온 답: 씬 대본 문장을 순서대로 컷에 나눠 담기.
  *  컷의 화면 묘사·인물과 문장이 얼마나 닮았는지 보고, 순서는 지키면서 가장 잘 맞게 나눔 */
 const bigrams = (t: string) => { const n = t.replace(/[^가-힣A-Za-z0-9]/g, ''); const b = new Set<string>(); for (let i = 0; i < n.length - 1; i++) b.add(n.slice(i, i + 2)); return b; };
-export function fillByOrder(scene: Scene, list: AICut[]): AICut[] {
+export function fillByOrder(scene: Scene, list: AICut[], hints: string[] = []): AICut[] {
   const units = sceneUnits(scene).filter(u => u.kind !== 'trans');
   const N = units.length, M = list.length;
   if (!N || !M) return list;
-  const cb = list.map(c => bigrams(`${c.see} ${c.cam || ''}`));
+  const cb = list.map((c, k) => bigrams(`${c.see} ${c.cam || ''} ${hints[k] || ''}`));
   const score = (i: number, j: number) => {
     const u = units[i]; const ub = bigrams(u.text); let common = 0;
     ub.forEach(x => { if (cb[j].has(x)) common++; });
@@ -599,6 +599,16 @@ export function fillByOrder(scene: Scene, list: AICut[]): AICut[] {
     for (const u of mine.filter(u => u.kind === 'dlg')) { const last = dl[dl.length - 1]; if (last && u.cont && last.speaker === (u.speaker || '')) last.text += ' ' + u.text; else dl.push({ speaker: u.speaker || '', text: u.text, off: !!u.off }); }
     return { ...c, src: c.src?.trim() ? c.src : src, dlg: c.dlg?.length ? c.dlg : dl };
   });
+}
+/** 답의 번호가 이 씬 대본(앱 파일 번호)과 안 맞는지: 씬 문장 수보다 큰 번호가 있으면 다른 파일로 센 번호 */
+export function numbersOff(scene: Scene, cuts: ParsedCut[]): boolean {
+  const n = sceneUnits(scene).length;
+  return cuts.some(c => [...(c.srcNums || []), ...(c.dlgNums || [])].some(x => x > n));
+}
+/** 번호는 버리고 내용으로 맞추기 (AI가 적은 "대본:" 요약은 맞추는 데 참고) */
+export function fillByContent(scene: Scene, cuts: ParsedCut[]): AICut[] {
+  const list: AICut[] = cuts.map(c => { const { scene: _s, idx: _i, srcNums: _a, dlgNums: _b, srcHints: _c, dlgHints: _d, ...rest } = c; return { ...rest, src: '', dlg: [] }; });
+  return fillByOrder(scene, list, cuts.map(c => c.src || ''));
 }
 /** 번호로 받은 답을 앱의 대본으로 채우기 */
 export function resolveNumbers(c: ParsedCut, scene: Scene): AICut {
