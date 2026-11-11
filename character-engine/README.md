@@ -7,7 +7,7 @@
 ```
 cd character-engine && npm ci
 npm run dev     # 브라우저에서 확인 (휴대폰에서도 같은 와이파이로 열 수 있음)
-npm test        # AI 없이 엔진 계산 시험
+npm test        # AI 없이 엔진 계산 시험 + 가짜 API 응답으로 오류·재시도 시험
 npm run build   # dist/ 에 웹앱
 ```
 
@@ -21,7 +21,7 @@ npm run build   # dist/ 에 웹앱
   - `screenplay.ts` 설정·사건·반응으로 시나리오 형식 글을 쓰는 요청 (작업실 .txt 형식)
   - `ai.ts` Claude API 호출(구조화된 출력, 거절 시 서버 쪽 대체 모델), 붙여넣은 답에서 JSON 꺼내기
 - `src/store.ts` 저장(idb-keyval), `src/importer.ts` 작업실 .sbk 에서 인물 가져오기
-- 화면: `App.tsx`(탭, 배경, 설정), `CharactersTab.tsx`, `EventsTab.tsx`, `ReactionCard.tsx`, `ScriptTab.tsx`, `OrganizePanel.tsx`(탭마다 AI로 채우기)
+- 화면: `App.tsx`(탭, 배경, 설정), `CharactersTab.tsx`, `EventsTab.tsx`, `ReactionCard.tsx`, `ScriptTab.tsx`, `OrganizePanel.tsx`(탭마다 AI로 채우기), `AiRun.tsx`(API 호출 공통 로딩 줄·멈추기·오류·다시 시도)
 
 ## AI 쓰는 방식 (설정 탭)
 - 복사 → 붙여넣기 (기본): 작업실처럼 요청을 복사해 외부 AI에 붙여넣고 답을 붙여넣는다. 요금 없음. 반응과 자체 점검을 한 번에 받는다.
