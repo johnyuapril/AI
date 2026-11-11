@@ -420,8 +420,28 @@ const stripMd = (s: string) => s.replace(/\*\*|__|`/g, '').replace(/^\s*[-*•]\
 
 /** AI 답 → 컷 목록. "[1-1] …" 형식과 표(| 컷 | 카메라 | 화면 |) 형식 둘 다 */
 export type ParsedCut = AICut & { scene: number; idx?: number; srcNums?: number[]; dlgNums?: number[]; srcHints?: string[]; dlgHints?: string[] };
+/** 토론 6부처럼 "S#19 …" 제목 아래 "C1 WS, 화면…" / "컷 1. MS / …" 로 쓴 답 → [19-1] 형식으로 바꾸기 */
+function convertSceneCutList(lines: string[]): string[] {
+  const hasStd = lines.some(l => /^\s*[-*•]?\s*\[?\s*S?#?\s*\d+\s*-\s*\d+\s*\]/.test(stripMd(l)));
+  if (hasStd) return lines;
+  const out: string[] = []; let scene = 0; let hit = false;
+  for (const raw of lines) {
+    const l = stripMd(raw);
+    const sh = l.match(/^#*\s*S\s*#\s*(\d+)\b/i) || l.match(/^#*\s*씬\s*(\d+)\b/);
+    if (sh) { scene = +sh[1]; out.push(raw); continue; }
+    const c = scene ? l.match(/^(?:C|컷|CUT)\s*(\d+)\s*[.:)\]]?\s+(.+)$/i) : null;
+    if (!c) { out.push(raw); continue; }
+    hit = true;
+    // 앞쪽의 샷·앵글·움직임 말은 카메라, 나머지는 화면
+    const toks = c[2].split(/\s*[,/·|]\s*/);
+    const camT: string[] = [];
+    while (toks.length > 1 && (parseShotLine(toks[0]) || /^(OTS|POV|2S|인서트|insert|부감|앙각|하이|로우|아이레벨|눈높이|핸드헬드|고정|팬|틸트|달리|트래킹|줌)/i.test(toks[0])) && toks[0].length <= 20) camT.push(toks.shift()!);
+    out.push(`[${scene}-${+c[1]}] ${camT.join(' / ')}`, `화면: ${toks.join(', ')}`);
+  }
+  return hit ? out : lines;
+}
 export function parseCutSplitAnswer(text: string, names: string[]): ParsedCut[] {
-  const lines = unescapeMd(text.replace(/\r/g, '')).split('\n');
+  const lines = convertSceneCutList(unescapeMd(text.replace(/\r/g, '')).split('\n'));
   const out: ParsedCut[] = [];
   const sceneOf = (l: string) => Number((l.match(/(\d+)\s*-\s*\d+/) || [])[1]) || 0;
   const cutOf = (l: string) => Number((l.match(/\d+\s*-\s*(\d+)/) || [])[1]) || 0;
