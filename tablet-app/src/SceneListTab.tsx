@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { WsProps } from './Workspace';
 import type { Project } from './types';
 import { applyAiCuts, autoSummary, cutValues, estimatePages, getCuts, getScenes, isAiScene, knownNames, mergeCuts, resetBreaks, sceneStats, splitAt, type Cut, type Scene } from './script';
-import { fillByContent, numbersOff, fillByOrder, buildCharSheetRequest, buildDebateRequest, buildDebateSummaryRequest, DEBATE_NEXT, parseDebate, buildCutSplitRequest, buildFullCutSplitRequest, fullScriptText, buildNextRequest, parseBible, parseCutSplitAnswer, parseSetTables, resolveNumbers, scriptFileName } from './prompts';
+import { fillByContent, numbersOff, fillByOrder, buildCharSheetRequest, buildDebateRequest, buildDebateSummaryRequest, DEBATE_NEXT, parseDebate, buildCutSplitRequest, buildFullCutSplitRequest, fullScriptText, buildNextRequest, parseBible, parseCutSplitAnswer, parseSetTables, resolveNumbers, scriptFileName, templatedScenes } from './prompts';
 import { copyText } from './util';
 import type { AICut } from './types';
 import { ANGLES, MOVES, SHOT_SIZES, termLabel } from './shots';
@@ -258,6 +258,7 @@ function AiSplitModal({ p, scene, scenes, names, onClose, onApply, onBible, from
   const [done, setDone] = useState<number[]>([]);
   const parsed = useMemo(() => text.trim() ? parseCutSplitAnswer(text, names) : [], [text, names]);
   const sets = useMemo(() => text.trim() ? parseSetTables(text) : {}, [text]);
+  const tmpl = useMemo(() => templatedScenes(parsed), [parsed]);
   const [ignoreNums, setIgnoreNums] = useState(false);
   const offScenes: number[] = [];
   const groups = useMemo(() => {
@@ -357,6 +358,7 @@ function AiSplitModal({ p, scene, scenes, names, onClose, onApply, onBible, from
       <textarea value={text} onChange={e => setText(e.target.value)} rows={10} style={{ width: '100%', fontSize: 14 }} placeholder={`[${scene?.num ?? 1}-1] EWS / 하이앵글 / 고정\n대본 번호: 1\n화면: …\n인물: 없음\n대사 번호: 없음`} />
       {text.trim() && total > 0 && <div className="row small-t">
         <label className="row" style={{ gap: 4 }}><input type="checkbox" checked={ignoreNums} onChange={e => setIgnoreNums(e.target.checked)} /> 대본 번호 무시하고 내용으로 맞추기</label>
+        {tmpl.length >= 3 && <span style={{ color: 'var(--danger, #c0392b)' }}><b>주의:</b> S#{tmpl.slice(0, 6).join(', S#')}{tmpl.length > 6 ? ` 등 ${tmpl.length}개 씬` : ''}에 똑같은 문장이 되풀이돼요. AI가 직접 쓰지 않고 틀(코드)로 찍어 낸 답 같아요. 넣지 말고 다시 받는 게 좋아요. 이 답이 토론을 근거로 했다면 토론.md도 같은 문제가 있는지 확인해 주세요. </span>}
         {offScenes.length > 0 && <span style={{ color: 'var(--accent)' }}>{ignoreNums ? '' : `S#${offScenes.slice(0, 8).join(', S#')}${offScenes.length > 8 ? ' …' : ''}: 번호가 앱 파일과 안 맞아서(한글 원본에 번호를 따로 센 듯) 내용으로 맞췄어요. `}다음부터는 앱의 "시나리오 파일 보내기" 파일을 첨부해 주세요.</span>}
       </div>}
       {text.trim() && <div className="small-t">{total ? <>읽은 결과: {groups.map(g => `S#${g[0].num} ${g[1].length}컷${g[2] ? '+설정표' : ''}`).join(', ').slice(0, 400)}</> : <span style={{ color: 'var(--accent)' }}>컷을 찾지 못했어요. [1-1] 같은 컷 번호가 있는지 확인해 주세요.</span>}</div>}

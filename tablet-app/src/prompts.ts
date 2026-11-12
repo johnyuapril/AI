@@ -130,6 +130,7 @@ export function masterPrompt(p: Project, scene: Scene, cuts: Cut[], s: Settings)
 // -------- 외부 AI로 컷 나누기 --------
 const DIRECTOR_RULES = [
   '너는 이 영화를 연출하는 영화감독이야. 촬영 전에 실제로 그릴 수 있는 정밀 콘티(스토리보드)를 만들 수 있게 시나리오를 컷으로 나누고 화면을 설계해 줘.',
+  '- 모든 내용은 네가 씬마다 그 씬의 대본을 읽고 직접 생각해서 써. 파이썬 같은 코드·스크립트·템플릿으로 문장을 찍어 내거나, 대본 문장을 정해진 틀에 끼워 넣거나, 여러 씬에 같은 문장·같은 컷 구성을 되풀이하지 마. 씬이 많아 오래 걸려도 괜찮으니 한 씬씩 직접 써. 코드는 글자 수를 잴 때만 써.',
   '- 기계적으로 문장마다 자르지 말고, 이야기 전체의 흐름과 인물의 감정을 생각해서 감독으로서 직접 판단해: 관객에게 정보를 공개하는 순서, 샷과 샷의 연결, 인물의 위치와 동작, 카메라의 움직임.',
   '- 한 컷 = 카메라가 끊기지 않고 보여 주는 한 화면. 한 문장 안에서도 보이는 대상, 크기, 장소가 바뀌면 컷을 나눠. (예: 항공 전경 → 도로 → 코너에서 나타나는 차)',
   '- 대본의 문장마다 (1), (2) 처럼 번호가 붙어 있어. 컷마다 그 컷이 보여 주는 지문의 번호와 들리는 대사의 번호만 적어. 대본 문장이나 대사는 한 글자도 옮겨 쓰지 마 (앱이 번호로 원문을 채워). 번호는 대본에 적힌 번호 그대로 쓰고 새로 세지 마. 대사·소리는 그게 들리는 동안 화면에 보이는 컷에 번호로 넣어.',
@@ -204,6 +205,7 @@ export function buildDebateRequest(p: Project, oneGo = false): string {
     '- 이 시나리오는 확정본이야. 이야기, 대사, 설정, 구성을 고치거나 보완하거나 더하거나 빼자는 말은 하지 마. 약점·개연성 지적이나 "이렇게 바꾸면 더 좋겠다"는 제안도 하지 마.',
     '- 토론할 것은 오직 "이 시나리오를 얼마나 깊이 이해하고 생생하게 상상해서 화면으로 그려 낼 것인가"야: 글 속 인물을 어떤 사람으로 그려 낼지, 장소와 화면을 얼마나 구체적으로 설정할지, 인물의 표정과 몸짓과 행동을 어떻게 보여 줄지.',
     '- 대본에 쓰여 있지 않은 것은 대본에 쓰인 것(행동, 대사, 지문의 단어)에서 근거를 찾아 상상해. 근거 없이 새 사건이나 설정을 만들지 마.',
+    '- 모든 내용은 네가 씬마다 그 씬의 대본을 읽고 직접 생각해서 써. 파이썬 같은 코드·스크립트·템플릿으로 문장을 찍어 내거나, 대본 문장을 정해진 틀에 끼워 넣거나, 여러 씬에 같은 문장·같은 컷 구성을 되풀이하지 마. 씬이 많아 오래 걸려도 괜찮으니 한 씬씩 직접 써. 코드는 글자 수를 잴 때만 써.',
     '',
     '[참석자] (세 사람 모두 이 시나리오만 읽은 가상의 인물이고, 서로 다른 분야의 전문가야)',
     '- 감독 (연출 전문가): 이 시나리오를 그대로 찍을 사람. 관심은 "어떻게 보여 줄까". 장면을 머릿속에 그려서 공간, 배우의 위치·동선·동작, 표정, 리듬, 카메라로 구체적으로 말한다. 화면으로 옮길 수 없는 해석에는 "그걸 화면에서 어떻게 보여 주지?"라고 되묻는다.',
@@ -483,6 +485,8 @@ export function parseCutSplitAnswer(text: string, names: string[]): ParsedCut[] 
     const m = l.match(/^\[?\s*S?#?\s*\d+\s*-\s*\d+\s*\]?\s*[.:)]?\s*(.*)$/);
     if (m && /^\[?\s*S?#?\s*\d+\s*-\s*\d+/.test(l)) { cur = { scene: sceneOf(l), idx: cutOf(l), ...cam(m[1] || ''), src: '', see: '', dlg: [] }; out.push(cur); field = ''; continue; }
     if (/^\[?\s*설정표/.test(l)) { cur = null; field = ''; continue; }
+    // 씬 제목(## S#2. …), 마크다운 제목, 토론 발언(감독: …)은 컷 내용이 아님 → 앞 컷에 붙이지 않음
+    if (/^#{1,6}\s/.test(raw.trim()) || /^S\s*#\s*\d+\s*[.:)]?\s/i.test(l) || /^(감독|작가|평론가)\s*[:：]/.test(l)) { cur = null; field = ''; continue; }
     if (!cur || !l) continue;
     const f = l.match(/^(대본\s*번호|대사\s*번호|대본|화면\s*효과|효과음|화면|연출|인물|대사|소리|카메라)\s*[:：]\s*(.*)$/);
     if (f) {
@@ -506,6 +510,17 @@ export function parseCutSplitAnswer(text: string, names: string[]): ParsedCut[] 
   }
   void names;
   return out;
+}
+/** AI가 틀(코드·템플릿)로 찍어 낸 답 같은지: 여러 씬에 똑같은 긴 문장이 되풀이되면 씬 번호들을 돌려줌 */
+export function templatedScenes(cuts: ParsedCut[]): number[] {
+  const where = new Map<string, Set<number>>();
+  for (const c of cuts) for (const t of splitSentences(`${c.see || ''} ${c.intent || ''}`)) {
+    const k = norm(t); if (k.length < 15) continue;
+    if (!where.has(k)) where.set(k, new Set()); where.get(k)!.add(c.scene);
+  }
+  const bad = new Set<number>();
+  where.forEach(sc => { if (sc.size >= 3) sc.forEach(n => bad.add(n)); });
+  return [...bad].sort((a, b) => a - b);
 }
 /** 답 속 [작품 설정] 덩어리 */
 export function parseBible(text: string): string | undefined {
