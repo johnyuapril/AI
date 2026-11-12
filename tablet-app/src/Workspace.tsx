@@ -12,7 +12,7 @@ import AnalysisTab from './AnalysisTab';
 import { Modal, useToast } from './ui';
 import { importFile, toFountain } from './importer';
 import { exportProject } from './backup';
-import { onAiDownload, isDesktop, openAiSide, AI_APPS, preferredAi, setPreferredAi, pickFiles, saveFile } from './native';
+import { onAiDownload, isDesktop, openAiSide, AI_APPS, preferredAi, setPreferredAi, onPreferredAi, pickFiles, saveFile } from './native';
 import { exportScriptPdf } from './pdf';
 import { getLinks, syncProject } from './gsync';
 import { openExternal } from './update';
@@ -27,6 +27,7 @@ export default function Workspace({ id, onClose, settings, setSettings }: { id: 
   const [p, setP] = useState<Project | null>(null);
   const [tab, setTab] = useState<Tab>('script');
   const [aiApp, setAiApp] = useState(preferredAi);
+  useEffect(() => onPreferredAi(setAiApp), []);
   const [focusScene, setFocusScene] = useState<string | undefined>();
   const [menu, setMenu] = useState(false);
   const [busy, setBusy] = useState('');

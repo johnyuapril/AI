@@ -51,7 +51,16 @@ export const AI_APPS: AiApp[] = [
 ];
 /** 내가 주로 쓰는 AI (기본 Claude) */
 export function preferredAi(): string { try { return localStorage.getItem('ai-app') || 'claude'; } catch { return 'claude'; } }
-export function setPreferredAi(id: string) { try { localStorage.setItem('ai-app', id); } catch { /* */ } }
+export function setPreferredAi(id: string) {
+  try { localStorage.setItem('ai-app', id); } catch { /* */ }
+  try { window.dispatchEvent(new CustomEvent('ai-app-changed', { detail: id })); } catch { /* */ }
+}
+/** 다른 곳에서 쓰는 AI를 바꾸면 알려 줌 (돌려준 함수로 그만 듣기) */
+export function onPreferredAi(fn: (id: string) => void) {
+  const h = (e: Event) => fn(String((e as CustomEvent).detail));
+  window.addEventListener('ai-app-changed', h);
+  return () => window.removeEventListener('ai-app-changed', h);
+}
 /** AI를 옆 화면에 열기 (앱이 없으면 웹) */
 export async function openAiSide(id = preferredAi()) {
   const a = AI_APPS.find(x => x.id === id) || AI_APPS[0];

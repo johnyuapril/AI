@@ -16,6 +16,13 @@ PC 원본 코드를 쓸 수 없어서 태블릿용으로 새로 만든 첫 버�
 - 분석: 대사 분량, 씬별 등장인물, 장소 낮/밤, CSV
 - 백업: 작품별 .sbk, 전체 백업 zip, 불러오기
 
+## 최근 변경 (2026-11-12) AI 옆 화면에 열 AI 고르기
+- 사용자 요청: "AI 옆 화면에 열기"를 ChatGPT와 Claude 중 고를 수 있게.
+- 3인 토론 창, AI 컷 나누기/토론 결과 받기 창의 "AI 옆 화면에 열기 ◫" 버튼을 **ChatGPT ◫ / Claude ◫ 두 버튼**(`src/AiSide.tsx` AiSideButtons)으로 바꿈. 누른 AI를 옆 화면에 열고 "쓰는 AI"(localStorage 'ai-app')로 기억, 지금 고른 쪽은 검게 표시.
+- 위쪽 막대의 AI 고르기(ChatGPT/Gemini/Claude)와 서로 맞춰짐 (`native.ts` setPreferredAi가 'ai-app-changed' 알림, onPreferredAi).
+- 윈도우: 옆 창이 이미 열려 있고 다른 AI를 고르면 그 창에서 새 주소로 바꿈(main.cjs 기존 동작). 로그인은 사이트마다 따로 남음.
+- 실제 태블릿/PC 확인은 사용자 몫.
+
 ## 최근 변경 (2026-11-11 저녁) 윈도우 AI 옆 창 파일 받기
 - 증상: AI 옆 창(Claude)에서 파일 받기를 눌러도 반응 없음. 원인: 받은 파일이 조용히 "받은 그림" 폴더에 저장되고 앱이 알림을 안 받음(onAiDownloaded 듣는 곳 없음), window.open으로 여는 다운로드는 바깥 브라우저로 넘김.
 - 고침(main.cjs): blob·data·같은 사이트 download 주소는 `downloadURL`로 창 안에서 받기. 글 파일은 문서/시나리오작업실/받은 파일, 그림은 받은 그림. 이름에 확장자 없으면 MIME으로 붙임. 윈도우 알림 + 앱에 'ai-downloaded'.

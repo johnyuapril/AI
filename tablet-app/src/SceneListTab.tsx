@@ -8,7 +8,8 @@ import type { AICut } from './types';
 import { ANGLES, MOVES, SHOT_SIZES, termLabel } from './shots';
 import { LazyText, Modal, useToast } from './ui';
 import { toCSV } from './util';
-import { aiDownloads, desktop, onAiDownload, openAiSide, pickFiles, preferredAi, saveFile } from './native';
+import { aiDownloads, desktop, onAiDownload, pickFiles, preferredAi, saveFile } from './native';
+import AiSideButtons from './AiSide';
 import { cutRows, sceneRows } from './exports';
 
 export default function SceneListTab({ p, update, go }: WsProps) {
@@ -214,14 +215,14 @@ function DebateModal({ p, update, onClose, onNext }: { p: Project; update: WsPro
         <b>2.</b> <button className="primary" onClick={() => copy(buildDebateRequest(p, oneGo))}>토론 요청 복사</button>
         {!oneGo && <button onClick={() => copy(DEBATE_NEXT)}>"다음" 요청 복사</button>}
         {false && rounds > 0 && <button onClick={() => copy(buildDebateSummaryRequest())} title="토론은 끝났는데 결론이 짧을 때, 같은 대화창에 붙여 넣어요">결론 자세히 다시 받기</button>}
-        <button onClick={() => openAiSide()}>AI 옆 화면에 열기 ◫</button>
+        <AiSideButtons />
         <span className="muted small-t">→ 한 번에 1~2부씩 답해요. 6부(씬별 컷과 앵글)는 몇 씬씩. 끝까지 "다음"으로 이어 가요</span>
       </div>
       <div className="row small-t">
         <label className="row" style={{ gap: 4 }}><input type="checkbox" checked={oneGo} onChange={e => setOneGo(e.target.checked)} /> <b>한 번에 끝까지</b> (Claude 추천)</label>
         <span className="muted">{oneGo ? 'AI가 "다음"을 기다리지 않고 1~6부를 파일(토론.md)에 이어 써요. 결과 콘티는 씬 몇 개씩 파일(콘티_S1-3.txt …)로 받아 "답 파일 불러오기"로 한꺼번에 넣어요.' : '한 번에 1~2부씩 쓰고, 대화창에 "ㄱ"이나 "다음"을 쳐서 이어 가요.'}</span>
       </div>
-      <div className="row"><b>3.</b> <span className="small-t">토론 답은 앱에 붙여 넣지 않아도 돼요. ChatGPT에서 "다음"으로 6부 마지막 씬까지 이어 가다가 <b>"토론 끝"</b>이 나오면 아래 <b>②</b>를 눌러요.</span></div>
+      <div className="row"><b>3.</b> <span className="small-t">토론 답은 앱에 붙여 넣지 않아도 돼요. AI 대화창에서 "다음"으로 6부 마지막 씬까지 이어 가다가 <b>"토론 끝"</b>이 나오면 아래 <b>②</b>를 눌러요.</span></div>
       {<div className="box-b" style={{ background: 'var(--soft)', borderRadius: 8, padding: 8 }}>
         <div className="row small-t"><b>캐릭터 시트</b><span className="muted">토론 2부(인물 그려 내기)가 끝나면, 같은 대화창에 붙여 넣어요. AI가 2부 내용을 정리한 뒤 그대로 마커펜 스토리보드풍 캐릭터 시트를 그려요. 한 번에 한 사람씩.</span></div>
         <div className="row" style={{ flexWrap: 'wrap', marginTop: 6 }}>
@@ -345,11 +346,11 @@ function AiSplitModal({ p, scene, scenes, names, onClose, onApply, onBible, from
       {fromDebate && <div className="row small-t" style={{ background: 'var(--accent-soft)', padding: 8, borderRadius: 8 }}>토론이 끝난 <b>그 대화창</b>에 "요청 문장 복사"를 붙여 넣어요. 시나리오 파일은 이미 첨부돼 있으니 다시 보내지 않아도 돼요. {toFile ? 'AI가 씬 몇 개씩 파일(콘티_S1-3.txt …)을 스스로 이어서 만들고, 파일마다 묘사가 줄지 않았는지 직접 재서 확인해요. 답 길이 한계로 멈추고 "계속"이라고 하면 그때만 "계속"을 쳐 주세요. 대화가 너무 길어져 더 못 이어 가면 새 대화에 토론.md와 시나리오 파일을 첨부하고, 범위를 남은 씬부터로 골라 다시 요청하면 돼요. 받은 파일을 모두 골라 "답 파일 불러오기"로 넣으면' : '받은 답을 붙여 넣으면'} 씬마다 컷·앵글·장면 묘사(설정표, 화면)가 들어가요.</div>}
       {!fromDebate && <div className="row">
         <b>1.</b> <button className={scene ? '' : 'primary'} onClick={async () => { try { await saveFile(new Blob([fullScriptText(p, allScenes)], { type: 'text/plain' }), scriptFileName(p)); } catch (e: any) { toast('파일 저장 실패: ' + (e?.message || e)); } }}>시나리오 파일 보내기</button>
-        <span className="muted small-t">→ {scene ? '(권장) 시나리오 전체를 같이 주면 뒤 씬 설정까지 반영돼요. ' : ''}공유 창에서 ChatGPT를 고르거나, 저장된 파일(문서/시나리오작업실)을 대화창에 첨부해요</span>
+        <span className="muted small-t">→ {scene ? '(권장) 시나리오 전체를 같이 주면 뒤 씬 설정까지 반영돼요. ' : ''}공유 창에서 AI 앱(ChatGPT·Claude)을 고르거나, 저장된 파일(문서/시나리오작업실)을 대화창에 첨부해요</span>
       </div>}
       <div className="row">
         <b>2.</b> <button className="primary" onClick={async () => toast(await copyText(request()) ? '복사했어요. 파일을 첨부한 대화창에 붙여 넣으세요.' : '복사하지 못했어요.')}>{scene ? '컷 나누기 요청 복사' : '요청 문장 복사'}</button>
-        <button onClick={() => openAiSide()}>AI 옆 화면에 열기 ◫</button>
+        <AiSideButtons />
         <span className="muted small-t">→ {scene ? '외부 AI에 붙여 넣고 답을 받아요' : '파일과 함께 보내요'}</span>
       </div>
       <div className="row"><b>3.</b> <button onClick={paste}>AI 답 붙여넣기</button><button onClick={loadFile}>답 파일 불러오기</button>{desktop?.readText && <button className={dlNew.length ? 'primary' : ''} disabled={!dlNew.length} onClick={loadDownloads}>AI 창에서 받은 파일 넣기{dlNew.length ? ` (${dlNew.length}개)` : ''}</button>}<span className="muted small-t">또는 아래 칸에 직접 붙여넣기 (표로 답해도 돼요)</span></div>
