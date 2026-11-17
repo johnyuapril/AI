@@ -1,7 +1,7 @@
 // AI에게 보내는 글. 설계서의 원칙, 반응 생성 흐름, 작위성 점검 규칙을 문장으로 옮김.
 import type { Character, Reaction, StoryEvent, World } from './types';
 import { DIR_LABEL, ROOT_FIELDS, ROOT_LABEL } from './types';
-import { pressureOf, stageOf } from './change';
+import { stageOf } from './change';
 
 export const PRINCIPLES = `너는 시나리오 작가를 돕는 "인물 엔진"이다. 사건이 닥쳤을 때 이 인물이 "그 사람이라면 정말 그렇게 할 것 같은" 반응을 만든다. 기준은 묘사의 화려함이 아니라 행동의 당위성과 자연스러움이다.
 
