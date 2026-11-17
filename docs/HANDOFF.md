@@ -48,8 +48,9 @@ PC 원본 코드를 쓸 수 없어서 태블릿용으로 새로 만든 첫 버�
   - '그림으로 저장': 씬마다 JPG(html2canvas scale 1.5 → 너비 1080).
   - AI 컷 나누기 요청에 '효과음:', '화면효과:' 줄과 '말하는 인물의 화면 위치를 꼭 쓰기'를 추가. AICut.sfx/fx → Cut.auto.sfx/fx.
 
-## 인물 엔진 (2026-11-03, 브랜치 character-engine)
+## 인물 엔진 (2026-11-03 시작, character-engine 브랜치 → main 병합 준비 2026-11-17)
 사용자가 시나리오 작업실과 별도로 "인물이 사건을 겪을 때 그 사람이라면 정말 그렇게 할 것 같은 반응"을 만드는 AI 도구를 만들기 시작함. 어느 정도 완성되면 작업실과 합칠 계획이라 같은 기술(React 18 + TS + Vite, IndexedDB)로 `character-engine/` 폴더에 따로 만듦. main 빌드(tablet-app)와는 상관없음.
+- 병합 준비 점검 (2026-11-17): PR #1 을 다시 봄. API 키는 저장소에 없고(설정 칸에만 넣고 IndexedDB에 저장, 백업 파일에는 안 들어감), 안 쓰던 import(prompts.ts pressureOf) 하나 지움. main과 충돌 없이 합쳐짐. main에 합치면 character-engine.yml 이 main push로도 .exe 를 만들고, tablet-app 이 안 바뀌어서 작업실 빌드는 돌지 않음.
 - 설계: 인물 엔진 설계서 https://claude.ai/artifact/StfQFv8HQumQWCfLdAy9EL (뿌리/현재 상태, 인지→감정→판단→행동, 작위성 점검, 성격 변화: 성장과 타락)
 - 엔진(`character-engine/src/engine/`)은 React 없이 순수 TS라 나중에 `tablet-app/src`로 옮길 수 있음. 자세한 구조는 `character-engine/README.md`.
 - AI: 기본은 작업실처럼 복사 → 외부 AI → 붙여넣기. 설정에서 Claude API(사용자 키, 기기에만 저장)를 고르면 반응 → 검수 → 걸리면 한 번 다시를 자동으로.
