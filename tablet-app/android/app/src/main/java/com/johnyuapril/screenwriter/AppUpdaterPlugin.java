@@ -86,6 +86,17 @@ public class AppUpdaterPlugin extends Plugin {
             send.putExtra(Intent.EXTRA_STREAM, uri);
             send.putExtra(Intent.EXTRA_TITLE, f.getName());
             send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | SIDE);
+            // 받을 앱을 정해 주면(예: Claude) 고르는 창 없이 그 앱으로 바로 보냄. 앱이 없으면 고르는 창
+            String pkg = call.getString("pkg", "");
+            if (!pkg.isEmpty()) {
+                send.setPackage(pkg);
+                if (send.resolveActivity(getContext().getPackageManager()) != null) {
+                    getContext().startActivity(send);
+                    call.resolve();
+                    return;
+                }
+                send.setPackage(null);
+            }
             Intent chooser = Intent.createChooser(send, call.getString("title", "보내기"));
             chooser.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | SIDE);
             getContext().startActivity(chooser);

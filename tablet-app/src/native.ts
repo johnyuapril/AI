@@ -71,6 +71,19 @@ export async function openAiSide(id = preferredAi()) {
 
 export const isNative = () => Capacitor.isNativePlatform();
 
+/** 고른 AI에 파일 보내기: 윈도우는 AI 옆 창을 열고 파일 위치(탐색기)를 보여 줌, 태블릿은 그 AI 앱을 옆 화면에 열면서 파일을 바로 첨부 */
+export async function sendToAi(blob: Blob, name: string, id = preferredAi()): Promise<void> {
+  const a = AI_APPS.find(x => x.id === id) || AI_APPS[0];
+  if (desktop) { await desktop.openAiSide(a.url); await desktop.saveFile(name, await bytes(blob), true); return; }
+  if (!isNative()) { window.open(a.url, '_blank'); downloadBlob(blob, name); return; }
+  const data = await blobToBase64(blob);
+  let r: { uri: string };
+  try { r = await Filesystem.writeFile({ path: '시나리오작업실/' + name, data, directory: Directory.Documents, recursive: true }); }
+  catch { r = await Filesystem.writeFile({ path: name, data, directory: Directory.Cache }); }
+  try { await AppNative.shareFile({ uri: r.uri, mime: mimeOf(name), title: '파일 보내기', pkg: a.pkg }); }
+  catch { await shareSide(r.uri, name, '파일 보내기'); }
+}
+
 function blobToBase64(b: Blob): Promise<string> {
   return new Promise((res, rej) => {
     const r = new FileReader();

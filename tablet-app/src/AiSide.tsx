@@ -13,3 +13,13 @@ export default function AiSideButtons() {
       onClick={() => { setPreferredAi(a.id); setCur(a.id); openAiSide(a.id); }}>{a.name} ◫</button>)}
   </span>;
 }
+
+/** 쓰는 AI만 고르기 (열지는 않음). 한 번 고르면 바꿀 때까지 기억 */
+export function AiPicker() {
+  const [cur, setCur] = useState(preferredAi);
+  useEffect(() => onPreferredAi(setCur), []);
+  return <span className="aipick">
+    <span className="muted small-t">쓰는 AI</span>
+    {SIDE_AIS.map(a => <button key={a.id} className={cur === a.id ? 'on' : ''} onClick={() => { setPreferredAi(a.id); setCur(a.id); }}>{a.name}</button>)}
+  </span>;
+}

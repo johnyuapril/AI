@@ -8,8 +8,8 @@ import type { AICut } from './types';
 import { ANGLES, MOVES, SHOT_SIZES, termLabel } from './shots';
 import { LazyText, Modal, useToast } from './ui';
 import { toCSV } from './util';
-import { aiDownloads, desktop, onAiDownload, pickFiles, preferredAi, saveFile } from './native';
-import AiSideButtons from './AiSide';
+import { aiDownloads, desktop, onAiDownload, openAiSide, pickFiles, preferredAi, saveFile, sendToAi } from './native';
+import AiSideButtons, { AiPicker } from './AiSide';
 import { cutRows, sceneRows } from './exports';
 
 export default function SceneListTab({ p, update, go }: WsProps) {
@@ -186,6 +186,13 @@ function DebateModal({ p, update, onClose, onNext }: { p: Project; update: WsPro
   const rounds = (p.debateLog || '').split('\n\n━━━━━━━━\n\n').filter(Boolean).length;
   const copy = async (t: string) => toast(await copyText(t) ? '복사했어요. AI 대화창에 붙여 넣으세요.' : '복사하지 못했어요.');
   const [oneGo, setOneGoS] = useState(() => { try { return (localStorage.getItem('debate-onego') ?? (preferredAi() === 'claude' ? '1' : '')) === '1'; } catch { return false; } });
+  const scriptBlob = () => new Blob([fullScriptText(p, scenes)], { type: 'text/plain' });
+  // 한 번에: 요청 복사(누른 순간이어야 복사가 됨) → AI 옆 화면 + 시나리오 파일 보내기
+  const start = async () => {
+    const ok = await copyText(buildDebateRequest(p, oneGo));
+    try { await sendToAi(scriptBlob(), scriptFileName(p)); } catch (e: any) { toast('파일 보내기 실패: ' + (e?.message || e)); return; }
+    toast(ok ? '요청 문장을 복사했어요. AI 창에 시나리오 파일을 첨부하고 붙여넣기 해 주세요.' : '요청 문장을 복사하지 못했어요. "요청만 다시 복사"를 눌러 주세요.');
+  };
   const setOneGo = (v: boolean) => { setOneGoS(v); try { localStorage.setItem('debate-onego', v ? '1' : ''); } catch { /* */ } };
   const add = () => {
     const t = text.trim(); if (!t) return;
@@ -207,22 +214,24 @@ function DebateModal({ p, update, onClose, onNext }: { p: Project; update: WsPro
   return <Modal wide title="① 3인 토론: 감독 · 작가 · 평론가" onClose={onClose}>
     <div style={{ display: 'grid', gap: 10 }}>
       <p className="muted small-t" style={{ margin: 0 }}>장면 묘사 전에 외부 AI가 <b>영화감독, 시나리오 작가, 평론가</b> 세 사람이 되어, 시나리오를 고치지 않고 <b>어떻게 이해하고 화면으로 그려 낼지</b> 깊이 토론해요(시나리오 읽기 → 인물 그려 내기 → 감정과 표정·행동 → 공간과 화면 → 씬별 핵심 순간과 분위기 → 씬별 컷과 앵글). 마지막 <b>[토론 결론]</b>이 저장되면 컷 나누기, 장면 묘사, 그림 프롬프트에 모두 같이 들어가요.</p>
+      <div className="row"><AiPicker /><span className="muted small-t">한 번 고르면 바꿀 때까지 그대로예요</span></div>
       <div className="row">
-        <b>1.</b> <button onClick={async () => { try { await saveFile(new Blob([fullScriptText(p, scenes)], { type: 'text/plain' }), scriptFileName(p)); } catch (e: any) { toast('파일 저장 실패: ' + (e?.message || e)); } }}>시나리오 파일 보내기</button>
-        <span className="muted small-t">→ AI 대화창에 첨부해요</span>
+        <button className="primary" onClick={start}>토론 시작하기</button>
+        <span className="muted small-t">→ 요청 문장을 복사하고, AI를 옆 화면에 열고, 시나리오 파일을 보내요. {desktop ? '탐색기에 뜬 시나리오 파일을 AI 창에 끌어다 놓고' : 'AI 앱에 파일이 첨부되면'}, 입력칸에 붙여넣기 해서 보내면 돼요.</span>
       </div>
-      <div className="row">
-        <b>2.</b> <button className="primary" onClick={() => copy(buildDebateRequest(p, oneGo))}>토론 요청 복사</button>
-        {!oneGo && <button onClick={() => copy(DEBATE_NEXT)}>"다음" 요청 복사</button>}
-        {false && rounds > 0 && <button onClick={() => copy(buildDebateSummaryRequest())} title="토론은 끝났는데 결론이 짧을 때, 같은 대화창에 붙여 넣어요">결론 자세히 다시 받기</button>}
-        <AiSideButtons />
-        <span className="muted small-t">→ 한 번에 1~2부씩 답해요. 6부(씬별 컷과 앵글)는 몇 씬씩. 끝까지 "다음"으로 이어 가요</span>
+      <div className="row small-t">
+        <span className="muted">다시 할 때:</span>
+        <button className="small ghost" onClick={() => copy(buildDebateRequest(p, oneGo))}>요청만 다시 복사</button>
+        <button className="small ghost" onClick={() => openAiSide()}>AI만 다시 열기</button>
+        <button className="small ghost" onClick={async () => { try { await sendToAi(scriptBlob(), scriptFileName(p)); } catch (e: any) { toast('파일 보내기 실패: ' + (e?.message || e)); } }}>시나리오 파일만 다시 보내기</button>
+        {!oneGo && <button className="small" onClick={() => copy(DEBATE_NEXT)}>"다음" 요청 복사</button>}
+        {false && rounds > 0 && <button onClick={() => copy(buildDebateSummaryRequest())}>결론 자세히 다시 받기</button>}
       </div>
       <div className="row small-t">
         <label className="row" style={{ gap: 4 }}><input type="checkbox" checked={oneGo} onChange={e => setOneGo(e.target.checked)} /> <b>파일로 길게, 10씬마다 "계속"</b> (Claude 추천)</label>
         <span className="muted">{oneGo ? 'AI가 토론을 파일(토론.md)에 이어 써요. 1·2·4부를 먼저 쓰고, 씬마다 다루는 3·5·6부는 10씬씩 묶어 쓰고 멈춰요. AI가 "계속할까요?"라고 하면 "계속"만 쳐 주세요. 한꺼번에 시키면 AI가 직접 안 쓰고 틀로 찍어 내서 이렇게 나눴어요. 결과 콘티도 10씬 안팎씩 파일(콘티_S1-3.txt …)로 받아 "답 파일 불러오기"로 한꺼번에 넣어요.' : '한 번에 1~2부씩 쓰고, 대화창에 "ㄱ"이나 "다음"을 쳐서 이어 가요.'}</span>
       </div>
-      <div className="row"><b>3.</b> <span className="small-t">토론 답은 앱에 붙여 넣지 않아도 돼요. AI 대화창에서 "다음"으로 마지막 씬까지 이어 가다가 <b>"토론 끝"</b>이 나오면 아래 <b>②</b>를 눌러요.</span></div>
+      <div className="row"><span className="small-t">토론 답은 앱에 붙여 넣지 않아도 돼요. AI 대화창에서 "계속"(또는 "다음")으로 마지막 씬까지 이어 가다가 <b>"토론 끝"</b>이 나오면 아래 <b>②</b>를 눌러요.</span></div>
       {<div className="box-b" style={{ background: 'var(--soft)', borderRadius: 8, padding: 8 }}>
         <div className="row small-t"><b>캐릭터 시트</b><span className="muted">토론 2부(인물 그려 내기)가 끝나면, 같은 대화창에 붙여 넣어요. AI가 2부 내용을 정리한 뒤 그대로 마커펜 스토리보드풍 캐릭터 시트를 그려요. 한 번에 한 사람씩.</span></div>
         <div className="row" style={{ flexWrap: 'wrap', marginTop: 6 }}>
