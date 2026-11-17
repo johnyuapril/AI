@@ -49,7 +49,7 @@ export default function ScriptTab({ p, update, focusScene, go }: WsProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const scenes = useMemo(() => getScenes(p.lines), [p.lines]);
-  const names = useMemo(() => knownNames(p), [p.lines, p.chars]);
+  const names = useMemo(() => knownNames(p), [p.lines, p.chars, p.scenes, p.bible]);
   const nameSet = useMemo(() => new Set(names), [names]);
   const nameSetRef = useRef(nameSet); nameSetRef.current = nameSet;
   const sceneNum = useMemo(() => { const m = new Map<string, number>(); scenes.forEach(s => m.set(s.id, s.num)); return m; }, [scenes]);

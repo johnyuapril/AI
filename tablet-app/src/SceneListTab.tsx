@@ -15,7 +15,7 @@ import { cutRows, sceneRows } from './exports';
 export default function SceneListTab({ p, update, go }: WsProps) {
   const toast = useToast();
   const scenes = useMemo(() => getScenes(p.lines), [p.lines]);
-  const names = useMemo(() => knownNames(p), [p.lines, p.chars]);
+  const names = useMemo(() => knownNames(p), [p.lines, p.chars, p.scenes, p.bible]);
   const allCuts = useMemo(() => new Map(scenes.map(s => [s.id, getCuts(p, s, names)])), [scenes, p.scenes, names]);
   const [open, setOpen] = useState<Set<string>>(new Set());
   const [filter, setFilter] = useState('');
@@ -55,7 +55,7 @@ export default function SceneListTab({ p, update, go }: WsProps) {
                 <td><button className="small ghost" onClick={() => toggle(s.id)}>{isOpen ? '▾' : '▸'}</button></td>
                 <td><b>{s.num}</b></td>
                 <td>{s.place}</td><td>{s.time}</td>
-                <td className="small-t">{st.chars.join(', ')}</td>
+                <td className="small-t">{[...new Set([...st.chars, ...cuts.flatMap(c => cutValues(p, c).chars)])].join(', ')}</td>
                 <td><input type="text" defaultValue={m.summary || ''} placeholder={autoSummary(s)} onBlur={e => setMeta(s.id, 'summary', e.target.value)} /></td>
                 <td>{cuts.length}{(m.breaks?.length || m.noBreaks?.length) ? <span title="직접 고친 컷" style={{ color: 'var(--accent)' }}>●</span> : null}</td>
                 <td className="small-t">{estimatePages(s.lines).toFixed(1)}쪽<br />{cuts.reduce((a, c) => a + c.seconds, 0)}초</td>

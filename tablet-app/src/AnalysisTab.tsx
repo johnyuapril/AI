@@ -10,7 +10,7 @@ const normPlace = (s: string) => s.replace(/\s*[-–,/].*$/, '').replace(/\s+/g,
 export default function AnalysisTab({ p, go }: WsProps) {
   const toast = useToast();
   const scenes = useMemo(() => getScenes(p.lines), [p.lines]);
-  const names = useMemo(() => knownNames(p), [p.lines, p.chars]);
+  const names = useMemo(() => knownNames(p), [p.lines, p.chars, p.scenes, p.bible]);
   const vol = useMemo(() => Object.entries(dialogueVolume(p.lines)).sort((a, b) => b[1].chars - a[1].chars), [p.lines]);
   const stats = useMemo(() => scenes.map(s => ({ s, st: sceneStats(s, names) })), [scenes, names]);
   const cols = useMemo(() => {

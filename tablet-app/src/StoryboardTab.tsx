@@ -30,7 +30,7 @@ export default function StoryboardTab(props: WsProps) {
   const { p, update, focusScene } = props;
   const toast = useToast();
   const scenes = useMemo(() => getScenes(p.lines), [p.lines]);
-  const names = useMemo(() => knownNames(p), [p.lines, p.chars]);
+  const names = useMemo(() => knownNames(p), [p.lines, p.chars, p.scenes, p.bible]);
   const fmt = (p.sbFormat as Fmt) || 'basic';
   const aspect = p.aspect || '16:9';
   const ratio = ASPECTS.find(a => a[0] === aspect)?.[1] || 16 / 9;

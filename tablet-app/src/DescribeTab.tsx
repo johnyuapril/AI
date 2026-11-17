@@ -12,7 +12,7 @@ export default function DescribeTab(props: WsProps) {
   const { p, update, settings, setSettings, focusScene } = props;
   const toast = useToast();
   const scenes = useMemo(() => getScenes(p.lines), [p.lines]);
-  const names = useMemo(() => knownNames(p), [p.lines, p.chars]);
+  const names = useMemo(() => knownNames(p), [p.lines, p.chars, p.scenes, p.bible]);
   const [open, setOpen] = useState<Set<string>>(() => new Set(focusScene ? [focusScene] : scenes[0] ? [scenes[0].id] : []));
   const [showInst, setShowInst] = useState(false);
   const toggle = (id: string) => setOpen(o => { const n = new Set(o); n.has(id) ? n.delete(id) : n.add(id); return n; });

@@ -55,7 +55,33 @@ export function getScenes(lines: Line[]): Scene[] {
 export function knownNames(p: Project): string[] {
   const s = new Set<string>(p.chars.map(c => c.name));
   for (const l of p.lines) if (l.t === 'character') { const n = speakerName(l.text); if (n) s.add(n); }
+  // 대사가 없거나 대사 줄 이름이 달리 적힌 인물도 놓치지 않게: AI가 준 작품 설정·설정표의 인물 줄, AI 컷의 인물
+  for (const n of namesInSettings(p.bible || '')) s.add(n);
+  for (const m of Object.values(p.scenes || {})) {
+    for (const n of namesInSettings(m?.setTable || '')) s.add(n);
+    for (const c of m?.aiCuts || []) for (const n of c.chars || []) if (n.length <= 8) s.add(n);
+  }
   return [...s].filter(Boolean);
+}
+/** "인물: 지영 - 28세 …" 다음 줄 "영민 - …" 처럼 적힌 인물 이름들 */
+const LABEL = /^(장소|시간|날씨|조명|시간·날씨·조명|차량|소품|차량·소품|시대|계절|시대·계절|공간|분위기|톤|색감)\s*[:：]/;
+export function namesInSettings(t: string): string[] {
+  const out: string[] = []; let on = false;
+  for (const raw of t.split('\n')) {
+    let l = raw.replace(/\*\*|__|`/g, '').replace(/^\s*[-*•]\s+/, '').trim();
+    if (!l) continue;
+    const lab = l.match(/^(인물|등장인물)\s*[:：]\s*(.*)$/);
+    if (lab) {
+      on = true; l = lab[2].trim(); if (!l) continue;
+      // "인물: 지영(28세), 영민" 처럼 한 줄에 여럿
+      if (!/\s[-–—]\s/.test(l) && /[,，、]/.test(l)) { for (const x of l.replace(/\(.*?\)/g, '').split(/[,，、]/)) { const n = x.trim().match(/^[가-힣A-Za-z]{1,8}$/); if (n) out.push(n[0]); } continue; }
+    }
+    else if (LABEL.test(l) || /^\[/.test(l)) { on = false; continue; }
+    if (!on) continue;
+    const m = l.match(/^([가-힣A-Za-z]{1,8})\s*(?:[-–—(:：,]|\s+-)/);
+    if (m && !/^(없음|모두|전원)$/.test(m[1])) out.push(m[1]);
+  }
+  return out;
 }
 export function speakerName(t: string): string {
   return t.replace(/\(.*?\)/g, '').replace(/\s+(V\.?O\.?|O\.?S\.?|NA|E)\s*$/i, '').trim();
@@ -272,7 +298,8 @@ export const aiKey = (sceneId: string, i: number) => `${sceneId}~ai${i}`;
 function aiCutsToCuts(scene: Scene, list: AICut[], names: string[]): Cut[] {
   return list.map((a, i) => {
     const dialogues = (a.dlg || []).map(d => ({ speaker: d.speaker, text: d.text, off: d.off }));
-    const chars = a.chars ?? names.filter(n => countMentions(a.see + ' ' + a.src, n) > 0);
+    // AI가 적은 인물 + 화면 묘사·대본에 이름이 나오는 인물 + 말하는 인물 (AI가 빠뜨려도 채움)
+    const chars = [...new Set([...(a.chars || []), ...names.filter(n => countMentions(a.see + ' ' + a.src, n) > 0), ...dialogues.filter(d => d.speaker && !d.off).map(d => d.speaker)])];
     const dlgLen = dialogues.reduce((x, d) => x + d.text.length, 0);
     return {
       key: aiKey(scene.id, i), sceneId: scene.id, no: i + 1, label: `${scene.num}-${i + 1}`,

@@ -14,7 +14,7 @@ export default function WebtoonTab(props: WsProps) {
   const { p, update, focusScene } = props;
   const toast = useToast();
   const scenes = useMemo(() => getScenes(p.lines), [p.lines]);
-  const names = useMemo(() => knownNames(p), [p.lines, p.chars]);
+  const names = useMemo(() => knownNames(p), [p.lines, p.chars, p.scenes, p.bible]);
   const startIdx = focusScene ? Math.max(0, scenes.findIndex(s => s.id === focusScene)) : 0;
   const [from, setFrom] = useState(startIdx);
   const [to, setTo] = useState(focusScene ? startIdx : Math.max(0, scenes.length - 1));
