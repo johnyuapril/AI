@@ -8,7 +8,7 @@ export const WRITER = `너는 한국 영화 시나리오 작가다. 아래 인�
 
 ${PRINCIPLES.split('\n\n').slice(1).join('\n\n')}`;
 
-const FORMAT = `형식 (이 형식 그대로, 시나리오 본문만 써라. 앞뒤 설명, 제목, 마크다운 기호는 쓰지 마라)
+export const FORMAT = `형식 (이 형식 그대로, 시나리오 본문만 써라. 앞뒤 설명, 제목, 마크다운 기호는 쓰지 마라)
 S#1. 장소 - 낮
 지문은 현재형으로, 카메라에 보이고 들리는 것만 쓴다. 인물의 속마음은 지문으로 설명하지 말고 행동, 표정, 머뭇거림, 말하지 않는 것으로 보여 준다.
 정훈 : 대사
@@ -24,33 +24,36 @@ export interface ScriptInput {
   threshold: number; extraRules: string[]; direction: string; startScene: number;
 }
 
+/** 사건 하나를 요청 글로 (돌린 반응이 있으면 그 선택을 붙임) */
+export function eventBlock(e: StoryEvent, i: number, chars: Character[], reactions: Reaction[]): string {
+  const rs = reactions.filter(r => r.eventId === e.id);
+  const last = new Map<string, Reaction>();
+  for (const r of rs) last.set(r.charId, r); // 같은 인물은 마지막 반응
+  const name = (id: string) => chars.find(c => c.id === id)?.name ?? '?';
+  const know = Object.entries(e.knowledge).filter(([, v]) => v.trim()).map(([id, v]) => `  - ${name(id)}가 아는 것: ${v}`).join('\n');
+  const react = [...last.values()].map(r => [
+    `  - ${name(r.charId)}`,
+    `    행동: ${r.action}`,
+    r.dialogue && `    대사(뼈대): ${r.dialogue}`,
+    r.inner && `    속마음(대사로 말하지 말고 행동과 침묵으로): ${r.inner}`,
+    r.later && `    며칠 뒤: ${r.later}`,
+  ].filter(Boolean).join('\n')).join('\n');
+  return [
+    `${i + 1}. ${e.title}`,
+    e.whenWhere && `  언제, 어디서: ${e.whenWhere}`,
+    `  일어난 일: ${e.what}`,
+    `  겪는 인물: ${e.participants.map(name).join(', ')}`,
+    know,
+    react ? `  인물 엔진이 정한 반응 (이 선택과 행동을 바꾸지 마라. 대사는 다듬고 늘려도 된다)\n${react}`
+      : '  (아직 반응을 정하지 않은 사건이다. 위 인물 설정과 원칙에 따라 각 인물이 그 사람이라면 정말 할 법한 반응을 네가 정해서 써라)',
+  ].filter(Boolean).join('\n');
+}
+
 export function screenplayPrompt(x: ScriptInput): string {
   const used = new Set(x.events.flatMap(e => e.participants));
   const people = x.chars.filter(c => used.has(c.id));
   const others = x.chars.filter(c => !used.has(c.id)).map(c => c.name);
-  const evs = x.events.map((e, i) => {
-    const rs = x.reactions.filter(r => r.eventId === e.id);
-    const last = new Map<string, Reaction>();
-    for (const r of rs) last.set(r.charId, r); // 같은 인물은 마지막 반응
-    const name = (id: string) => x.chars.find(c => c.id === id)?.name ?? '?';
-    const know = Object.entries(e.knowledge).filter(([, v]) => v.trim()).map(([id, v]) => `  - ${name(id)}가 아는 것: ${v}`).join('\n');
-    const react = [...last.values()].map(r => [
-      `  - ${name(r.charId)}`,
-      `    행동: ${r.action}`,
-      r.dialogue && `    대사(뼈대): ${r.dialogue}`,
-      r.inner && `    속마음(대사로 말하지 말고 행동과 침묵으로): ${r.inner}`,
-      r.later && `    며칠 뒤: ${r.later}`,
-    ].filter(Boolean).join('\n')).join('\n');
-    return [
-      `${i + 1}. ${e.title}`,
-      e.whenWhere && `  언제, 어디서: ${e.whenWhere}`,
-      `  일어난 일: ${e.what}`,
-      `  겪는 인물: ${e.participants.map(name).join(', ')}`,
-      know,
-      react ? `  인물 엔진이 정한 반응 (이 선택과 행동을 바꾸지 마라. 대사는 다듬고 늘려도 된다)\n${react}`
-        : '  (아직 반응을 정하지 않은 사건이다. 위 인물 설정과 원칙에 따라 각 인물이 그 사람이라면 정말 할 법한 반응을 네가 정해서 써라)',
-    ].filter(Boolean).join('\n');
-  }).join('\n\n');
+  const evs = x.events.map((e, i) => eventBlock(e, i, x.chars, x.reactions)).join('\n\n');
   return [
     describeWorld(x.world),
     `등장인물\n\n${people.map(c => describeCharacter(c, x.chars, x.threshold)).join('\n\n---\n\n')}`,
