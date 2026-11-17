@@ -3,7 +3,7 @@ import type { Character, ChangeDir, PressureDelta, Reaction, RootChangeProposal,
 import { ROOT_FIELDS } from './types';
 import { applyReaction, filterProposal } from './change';
 import { PRINCIPLES, REACTION_SCHEMA, REVIEWER, REVIEW_SCHEMA, ARC_SCHEMA, arcPrompt, reactionPrompt, reviewPrompt, type Ctx, type SeenAction } from './prompts';
-import { askJson } from './ai';
+import { askJson, type AskOpts } from './ai';
 
 const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
 const str = (v: unknown) => (typeof v === 'string' ? v : v == null ? '' : String(v));
@@ -42,15 +42,15 @@ export function commit(char: Character, r: Reaction, ev: StoryEvent, threshold: 
 export const seenOf = (c: Character, r: Reaction): SeenAction => ({ name: c.name, action: r.action, dialogue: r.dialogue });
 
 /** API 방식: 인물 하나 */
-export async function runOne(s: Settings, x: Ctx, onStage?: (t: string) => void): Promise<StepResult> {
+export async function runOne(s: Settings, x: Ctx, onStage?: (t: string) => void, opts: AskOpts = {}): Promise<StepResult> {
   let feedback: string[] | undefined;
   let r!: Reaction;
   for (let tries = 1; tries <= 2; tries++) {
     onStage?.(tries === 1 ? `${x.char.name}: 반응 만드는 중` : `${x.char.name}: 점검에 걸려 다시 만드는 중`);
-    const raw = await askJson<any>(s.apiKey, s.model, PRINCIPLES, reactionPrompt(x, feedback), REACTION_SCHEMA as any);
+    const raw = await askJson<any>(s.apiKey, s.model, PRINCIPLES, reactionPrompt(x, feedback), REACTION_SCHEMA as any, opts);
     r = toReaction(raw, x.event, x.char.id, tries);
     onStage?.(`${x.char.name}: 작위성 점검 중`);
-    const review = await askJson<{ pass: boolean; issues: string[] }>(s.apiKey, s.model, REVIEWER, reviewPrompt(x, r), REVIEW_SCHEMA as any);
+    const review = await askJson<{ pass: boolean; issues: string[] }>(s.apiKey, s.model, REVIEWER, reviewPrompt(x, r), REVIEW_SCHEMA as any, opts);
     r.check = { pass: !!review.pass, issues: strs(review.issues) };
     if (r.check.pass) break;
     feedback = r.check.issues;
@@ -58,15 +58,30 @@ export async function runOne(s: Settings, x: Ctx, onStage?: (t: string) => void)
   return commit(x.char, r, x.event, x.threshold);
 }
 
-/** API 방식: 사건에 나오는 인물을 순서대로. 앞 인물의 행동과 말은 뒤 인물이 본다. */
-export async function runEvent(s: Settings, world: World, chars: Character[], ev: StoryEvent, onStage?: (t: string) => void, onEach?: (res: StepResult) => void): Promise<StepResult[]> {
+/** 앞에서 이미 끝난 인물 (실패 뒤 '다시 시도'할 때 그 인물부터 이어서 돌리려고) */
+export interface Resume { doneIds: string[]; seen: SeenAction[] }
+
+/** 이번에 돌린 반응들로 이어 돌릴 자리를 찾는다 */
+export function resumeOf(ev: StoryEvent, chars: Character[], reactions: Reaction[]): Resume {
+  const rs = ev.participants.map(id => reactions.find(r => r.charId === id && r.eventId === ev.id)).filter((r): r is Reaction => !!r);
+  return {
+    doneIds: rs.map(r => r.charId),
+    seen: rs.map(r => { const c = chars.find(x => x.id === r.charId); return c ? seenOf(c, r) : null; }).filter((x): x is SeenAction => !!x),
+  };
+}
+
+/** API 방식: 사건에 나오는 인물을 순서대로. 앞 인물의 행동과 말은 뒤 인물이 본다. resume 이 있으면 끝난 인물은 건너뛴다. */
+export async function runEvent(s: Settings, world: World, chars: Character[], ev: StoryEvent, onStage?: (t: string) => void, onEach?: (res: StepResult) => void, opts: AskOpts = {}, resume?: Resume): Promise<StepResult[]> {
   const out: StepResult[] = [];
   let all = chars;
-  const seen: SeenAction[] = [];
-  for (const id of ev.participants) {
-    const char = all.find(c => c.id === id);
-    if (!char) continue;
-    const res = await runOne(s, { world, char, all, event: ev, seen: [...seen], threshold: s.threshold, extraRules: s.extraRules }, onStage);
+  const seen: SeenAction[] = [...(resume?.seen ?? [])];
+  const people = ev.participants.filter(id => all.some(c => c.id === id));
+  for (const id of people) {
+    if (resume?.doneIds.includes(id)) continue;
+    const char = all.find(c => c.id === id)!;
+    const n = people.indexOf(id) + 1;
+    const stage = people.length > 1 ? (t: string) => onStage?.(`${n}/${people.length} · ${t}`) : onStage;
+    const res = await runOne(s, { world, char, all, event: ev, seen: [...seen], threshold: s.threshold, extraRules: s.extraRules }, stage, opts);
     all = all.map(c => (c.id === id ? res.char : c));
     seen.push(seenOf(res.char, res.reaction));
     out.push(res);
@@ -76,6 +91,6 @@ export async function runEvent(s: Settings, world: World, chars: Character[], ev
 }
 
 export interface ArcCheck { justified: boolean; progress: string; missing: string[]; risk: string }
-export async function checkArc(s: Settings, world: World, c: Character, all: Character[]): Promise<ArcCheck> {
-  return askJson<ArcCheck>(s.apiKey, s.model, PRINCIPLES, arcPrompt(world, c, all, s.threshold), ARC_SCHEMA as any);
+export async function checkArc(s: Settings, world: World, c: Character, all: Character[], opts: AskOpts = {}): Promise<ArcCheck> {
+  return askJson<ArcCheck>(s.apiKey, s.model, PRINCIPLES, arcPrompt(world, c, all, s.threshold), ARC_SCHEMA as any, opts);
 }

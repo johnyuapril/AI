@@ -10,13 +10,14 @@ import {
   type SceneCharState, type SceneInput, type ScriptScene,
 } from './engine/sequence';
 import { ConfirmButton, copyText } from './ui';
+import { AiStatus, keyMissing, useAiTask } from './AiRun';
 
 type SetBook = (f: (b: Book) => Book) => void;
 
 export default function SceneFlow({ book, setBook, settings, ready, direction }: { book: Book; setBook: SetBook; settings: Settings; ready: StoryEvent[]; direction: string }) {
   const scenes = book.scenes ?? [];
   const [answer, setAnswer] = useState('');
-  const [busy, setBusy] = useState(false);
+  const task = useAiTask();
   const [copied, setCopied] = useState('');
   const [err, setErr] = useState('');
   const [msg, setMsg] = useState('');
@@ -45,9 +46,12 @@ export default function SceneFlow({ book, setBook, settings, ready, direction }:
     }));
     setMsg(r.after.length ? `장면 ${next + 1}을 넣었어요. 인물 ${r.after.length}명의 상태를 다음 장면에 넘겨요.` : `장면 ${next + 1}을 넣었어요. 답에 인물 상태가 없어서 앞 상태를 그대로 넘겨요.`);
   };
-  const runApi = async () => {
-    setBusy(true); setErr(''); setMsg('');
-    try { put(await askText(settings.apiKey, settings.model, WRITER, sceneApiPrompt(input()))); } catch (e: any) { setErr(e.message ?? String(e)); } finally { setBusy(false); }
+  const runApi = () => {
+    setErr(''); setMsg('');
+    return task.run(async (o, stage) => {
+      stage(`장면 ${next + 1} 쓰는 중 (몇 분 걸릴 수 있어요)`);
+      put(await askText(settings.apiKey, settings.model, WRITER, sceneApiPrompt(input()), o));
+    });
   };
   const rewrite = (s: ScriptScene) => {
     const cut = removeTail(book.script ?? '', s.text ?? '');
@@ -129,7 +133,10 @@ export default function SceneFlow({ book, setBook, settings, ready, direction }:
           ) : <div className="muted small-t">첫 장면이에요. 인물 탭의 현재 상태에서 시작해요.</div>}
           {!nextEvs.length && <div className="err">이 장면에 담을 사건을 하나 이상 고르세요.</div>}
           {settings.mode === 'api' ? (
-            <div className="row"><button className="accent" disabled={!nextEvs.length || busy} onClick={runApi}>{busy ? '쓰는 중… (몇 분 걸릴 수 있어요)' : `장면 ${next + 1} 쓰기`}</button></div>
+            <>
+              <div className="row"><button className="accent" disabled={!nextEvs.length || task.busy || keyMissing(settings)} onClick={runApi}>{task.busy ? '쓰는 중…' : `장면 ${next + 1} 쓰기`}</button></div>
+              <AiStatus task={task} onRetry={runApi} settings={settings} />
+            </>
           ) : (
             <>
               <div className="row">
