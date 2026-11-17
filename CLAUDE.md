@@ -14,6 +14,7 @@
 - `tablet-app/android/` : Capacitor 안드로이드 프로젝트
 - `tablet-app/desktop/` : 윈도우용(Electron). 같은 화면(`tablet-app/dist`)을 그대로 띄운다. `main.cjs`(파일 저장, AI 옆 창, 업데이트), `preload.cjs`(`window.desktop`)
 - **두 플랫폼은 화면 코드(`src/`)를 함께 쓴다.** 기능은 `src/`에 한 번만 만든다. 플랫폼마다 다른 일(파일 저장, 공유, AI 열기, 업데이트, 구글 전송)은 `src/native.ts`(`isNative()`=안드로이드, `isDesktop()`=윈도우)에서만 나눈다.
+- `character-engine/` : 인물 엔진(별도 웹앱, 브랜치 character-engine에서 개발 중). 나중에 작업실과 합칠 예정. `character-engine/README.md` 참고
 - `.github/workflows/android.yml` : APK와 윈도우 설치 파일(.exe) 빌드, 한 릴리스에 함께 올림. 파일 이름을 바꾸면 빌드 번호가 다시 1부터라 업데이트가 깨지니 바꾸지 말 것
 - 서명 키는 저장소에 올리지 않는다. GitHub Actions 비밀값 `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`로 CI에서 넣는다. 같은 키로 서명해야 업데이트가 덮어 설치된다. 키를 바꾸면 앱을 지우고 다시 깔아야 한다.
 

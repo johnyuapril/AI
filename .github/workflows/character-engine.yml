@@ -1,0 +1,74 @@
+# 인물 엔진 윈도우 설치 파일(.exe) 만들기. 시나리오 작업실(android.yml)과 따로 돈다.
+# 릴리스 태그는 ce-v1.0.<빌드 번호>. 작업실 업데이트가 'latest' 릴리스를 보므로 인물 엔진 릴리스는 latest 로 표시하지 않는다.
+# 파일 이름을 바꾸면 빌드 번호가 1부터 다시 시작해서 업데이트가 깨지니 바꾸지 말 것.
+name: 인물 엔진 만들기 (윈도우)
+
+on:
+  push:
+    branches: [main, character-engine]
+    paths: ['character-engine/**', '.github/workflows/character-engine.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: character-engine
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            character-engine/package-lock.json
+            character-engine/desktop/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+        env:
+          VITE_BUILD: ${{ github.run_number }}
+      - run: npm ci
+        working-directory: character-engine/desktop
+      - name: 윈도우 설치 파일 빌드
+        working-directory: character-engine/desktop
+        shell: bash
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: |
+          npm run copy-web
+          npx electron-builder --win --x64 --publish never --config.extraMetadata.version=1.0.${{ github.run_number }}
+          # 브라우저가 .exe 다운로드를 막을 때를 위해 zip 으로도 (업데이트 버튼은 .exe 를 씀)
+          cd release && 7z a "CharacterEngine-Setup-1.0.${{ github.run_number }}.zip" "CharacterEngine-Setup-1.0.${{ github.run_number }}.exe"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: exe
+          path: |
+            character-engine/desktop/release/*.exe
+            character-engine/desktop/release/*.zip
+
+  release:
+    needs: windows
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: exe
+          path: out
+      - run: ls -la out
+      - name: 릴리스로 올리기
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ce-v1.0.${{ github.run_number }}
+          target_commitish: ${{ github.sha }}
+          name: 인물 엔진 v1.0.${{ github.run_number }}
+          body: |
+            윈도우: 아래 CharacterEngine-Setup-….exe 를 받아 실행하면 설치돼요. 브라우저가 .exe 를 막으면 같은 이름의 .zip 을 받아 압축을 풀고 안의 .exe 를 실행하세요. "Windows의 PC 보호" 창이 뜨면 "추가 정보" → "실행"을 눌러 주세요.
+            설치한 뒤에는 앱 위쪽의 "업데이트" 버튼이나 설정 탭의 "업데이트 확인"으로 새 버전을 바로 설치할 수 있어요. 인물과 사건은 지워지지 않아요.
+            브랜치: ${{ github.ref_name }} · 커밋: ${{ github.sha }}
+          files: out/*
+          make_latest: false

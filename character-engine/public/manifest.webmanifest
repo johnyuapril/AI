@@ -1,0 +1,2 @@
+{ "name": "인물 엔진", "short_name": "인물 엔진", "start_url": "./", "display": "standalone", "background_color": "#f4f4f2", "theme_color": "#111111", "lang": "ko",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml" }] }
