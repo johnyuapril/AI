@@ -190,10 +190,12 @@ function DebateModal({ p, update, onClose, onNext }: { p: Project; update: WsPro
   const scriptBlob = () => new Blob([fullScriptText(p, scenes)], { type: 'text/plain' });
   // 한 번에: 요청 복사(누른 순간이어야 복사가 됨) → AI 옆 화면 + 시나리오 파일 보내기
   const start = async () => {
-    const ok = await copyText(buildDebateRequest(p, oneGo));
+    const ok = await copyText(buildDebateRequest(p, oneGo, oneGo && noStop));
     try { await sendToAi(scriptBlob(), scriptFileName(p)); } catch (e: any) { toast('파일 보내기 실패: ' + (e?.message || e)); return; }
     toast(ok ? '요청 문장을 복사했어요. AI 창에 시나리오 파일을 첨부하고 붙여넣기 해 주세요.' : '요청 문장을 복사하지 못했어요. "요청만 다시 복사"를 눌러 주세요.');
   };
+  const [noStop, setNoStopS] = useState(() => { try { return localStorage.getItem('debate-nostop') === '1'; } catch { return false; } });
+  const setNoStop = (v: boolean) => { setNoStopS(v); try { localStorage.setItem('debate-nostop', v ? '1' : ''); } catch { /* */ } };
   const setOneGo = (v: boolean) => { setOneGoS(v); try { localStorage.setItem('debate-onego', v ? '1' : ''); } catch { /* */ } };
   const add = () => {
     const t = text.trim(); if (!t) return;
@@ -222,15 +224,16 @@ function DebateModal({ p, update, onClose, onNext }: { p: Project; update: WsPro
       </div>
       <div className="row small-t">
         <span className="muted">다시 할 때:</span>
-        <button className="small ghost" onClick={() => copy(buildDebateRequest(p, oneGo))}>요청만 다시 복사</button>
+        <button className="small ghost" onClick={() => copy(buildDebateRequest(p, oneGo, oneGo && noStop))}>요청만 다시 복사</button>
         <button className="small ghost" onClick={() => openAiSide()}>AI만 다시 열기</button>
         <button className="small ghost" onClick={async () => { try { await sendToAi(scriptBlob(), scriptFileName(p)); } catch (e: any) { toast('파일 보내기 실패: ' + (e?.message || e)); } }}>시나리오 파일만 다시 보내기</button>
         {!oneGo && <button className="small" onClick={() => copy(DEBATE_NEXT)}>"다음" 요청 복사</button>}
         {false && rounds > 0 && <button onClick={() => copy(buildDebateSummaryRequest())}>결론 자세히 다시 받기</button>}
       </div>
       <div className="row small-t">
-        <label className="row" style={{ gap: 4 }}><input type="checkbox" checked={oneGo} onChange={e => setOneGo(e.target.checked)} /> <b>토론 + 콘티 한 번에, 9씬마다 "계속"</b> (Claude 추천)</label>
-        <span className="muted">{oneGo ? 'AI가 토론은 토론.md에, 콘티는 콘티_S1-3.txt처럼 3씬씩 따로 파일로 만들어요. 1·2·4부 토론을 먼저 쓰고 멈추고, 그다음 9씬마다 그 씬들의 토론(3·5·6부)과 콘티 파일 3개를 쓰고 멈춰요. "계속할까요?"라고 하면 "계속"만 쳐 주세요. 콘티 파일만 모아서 아래 ②에서 "답 파일 불러오기"로 넣어요(토론.md는 넣지 않아요).' : '한 번에 1~2부씩 쓰고, 대화창에 "ㄱ"이나 "다음"을 쳐서 이어 가요.'}</span>
+        <label className="row" style={{ gap: 4 }}><input type="checkbox" checked={oneGo} onChange={e => setOneGo(e.target.checked)} /> <b>토론 + 콘티 한 번에</b> (Claude 추천)</label>
+        {oneGo && <label className="row" style={{ gap: 4 }}><input type="checkbox" checked={noStop} onChange={e => setNoStop(e.target.checked)} /> <b>멈추지 않고 끝까지</b></label>}
+        <span className="muted">{oneGo ? 'AI가 토론은 토론.md에, 콘티는 콘티_S1-3.txt처럼 3씬씩 따로 파일로 만들어요. 1·2·4부 토론을 먼저 쓰고, 그다음 9씬마다 그 씬들의 토론(3·5·6부)과 콘티 파일 3개를 써요. ' + (noStop ? '"멈추지 않고 끝까지"를 켜면 AI가 스스로 이어 가고, 답 길이 한계로 멈출 때만 "계속"을 쳐요. 콘티에 똑같은 문장이 되풀이되면 앱이 빨간 경고를 띄우니, 그땐 이 체크를 끄고 다시 받아요. ' : '9씬마다 멈추고 "계속할까요?"라고 하면 "계속"만 쳐 주세요. ') + ' 콘티 파일만 모아서 아래 ②에서 "답 파일 불러오기"로 넣어요(토론.md는 넣지 않아요).' : '한 번에 1~2부씩 쓰고, 대화창에 "ㄱ"이나 "다음"을 쳐서 이어 가요.'}</span>
       </div>
       <div className="row"><span className="small-t">{oneGo ? <>토론.md는 앱에 넣지 않아요. 콘티 파일이 생기면 아래 <b>②</b>를 눌러 넣어요 (중간에 몇 묶음씩 넣어도 돼요).</> : <>토론 답은 앱에 붙여 넣지 않아도 돼요. AI 대화창에서 "다음"으로 마지막 씬까지 이어 가다가 <b>"토론 끝"</b>이 나오면 아래 <b>②</b>를 눌러요.</>}</span></div>
       {<div className="box-b" style={{ background: 'var(--soft)', borderRadius: 8, padding: 8 }}>

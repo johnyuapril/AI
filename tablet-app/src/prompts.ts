@@ -198,7 +198,7 @@ function bibleBlock(p: Project, scene?: Scene): string[] {
 // -------- 감독·작가·평론가 3인 토론 --------
 /** 한 번에 직접 쓰게 할 씬 수 (한꺼번에 많이 시키면 AI가 코드·틀로 찍어 냄) */
 export const DEBATE_CHUNK = 9; // 콘티 파일 3씬 × 3개
-export function buildDebateRequest(p: Project, oneGo = false): string {
+export function buildDebateRequest(p: Project, oneGo = false, noStop = false): string {
   const n = getScenes(p.lines).length;
   const lines = [
     `첨부한 시나리오 파일 "${scriptFileName(p)}"(씬 ${n}개, 내가 쓴 미발표 작품)을 끝까지 읽고, 아래 세 사람이 이 시나리오를 화면으로 옮기기 전에 깊이 있게 토론하는 자리를 실제 대화로 써 줘.`,
@@ -246,6 +246,13 @@ export function buildDebateRequest(p: Project, oneGo = false): string {
     ? '- 마지막 씬 묶음까지 다 쓰면 대화창에 "끝"이라고만 써.'
     : l.replace('씬이 많으니 6부는 씬 몇 개씩 나눠서 "다음"으로 끝까지 이어 가고, 씬을 건너뛰거나 뭉뚱그리지 마.', '6부는 모든 씬을 하나씩, 건너뛰거나 뭉뚱그리지 마.'));
   const conti = p ? buildFullCutSplitRequest(p, getScenes(p.lines), 3, undefined, true, true, true) : '';
+  if (noStop) {
+    // 멈추지 않고 끝까지: 묶음 순서는 그대로, 묶음마다 기다리지 않음 (답 길이 한계일 때만 "계속")
+    const ns = one.map(l => l.startsWith('- 답이 아주 길어지니 파일 만들기 기능으로 쓰고')
+      ? l.replace('토론.md에 쓰고 멈춰.', '토론.md에 쓰고,').replace(/ 묶음 하나를 끝낼 때마다 멈추고 대화창에 "S#a~S#b까지 썼어요\. 계속할까요\?"라고만 써서 내가 "계속"이라고 할 때까지 기다려\. 한 번에 그보다 많이 쓰지 마\./, ' 묶음 하나를 끝내면 나에게 묻지 말고 바로 다음 묶음으로 넘어가서 마지막 씬까지 스스로 계속해. 답 길이 한계로 멈춰야 할 때만 묶음이 끝나는 곳에서 멈추고 "계속"이라고 써. 오래 걸려도 묶음마다 한 씬씩 직접 써. 묶음이 늘어난다고 코드나 틀로 한꺼번에 찍어 내면 절대 안 돼.')
+      : l);
+    return [...ns, '', conti, '', '지금 1부부터 시작해서 마지막 씬까지 진행해 줘.'].join('\n');
+  }
   return [...one, '', conti, '', '지금 1부부터 시작해서 1·2·4부를 토론.md에 쓰고 멈춰 줘.'].join('\n');
 }
 const DEBATE_FORMAT = [
