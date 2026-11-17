@@ -92,7 +92,7 @@ function SceneDesc({ p, update, settings, scene, names, open, onToggle }: WsProp
       {cuts.map(c => {
         const m = p.cuts[c.key] || {};
         return <div className="drow" key={c.key}>
-          <div><div className="lbl">{c.label}</div><div className="scr">{c.action}{c.dialogues.map(d => `\n${d.speaker}${d.off ? '(소리)' : ''}: ${d.text}`).join('')}</div></div>
+          <div><div className="lbl">{c.label}</div><div className="scr">{c.action || (!c.dialogues.length && c.auto.src === 'AI' ? <span className="muted">(이 컷에 연결된 대본 없음: AI가 대본 번호를 안 줌)</span> : null)}{c.dialogues.map(d => `\n${d.speaker}${d.off ? '(소리)' : ''}: ${d.text}`).join('')}</div></div>
           <LazyText value={m.desc || ''} placeholder="아직 묘사 없음. 직접 써도 돼요." onSave={v => setCut(c.key, { desc: v, descManual: true })} />
           <LazyText value={m.corr || ''} placeholder="AI가 잘못 이해한 점" onSave={v => setCut(c.key, { corr: v })} />
         </div>;

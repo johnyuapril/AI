@@ -303,7 +303,8 @@ function aiCutsToCuts(scene: Scene, list: AICut[], names: string[]): Cut[] {
     const dlgLen = dialogues.reduce((x, d) => x + d.text.length, 0);
     return {
       key: aiKey(scene.id, i), sceneId: scene.id, no: i + 1, label: `${scene.num}-${i + 1}`,
-      units: [], action: a.src || a.see, dialogues,
+      // 대본 칸에는 대본만 (AI가 대본 번호를 안 줘서 비면 화면 묘사로 채우지 않음: 묘사와 대본이 똑같아 보이던 문제)
+      units: [], action: a.src || '', dialogues,
       auto: { shot: a.shot, angle: a.angle, move: a.move, chars, src: 'AI', note: [a.cam, a.intent && '연출: ' + a.intent].filter(Boolean).join(' · ') || undefined, sfx: a.sfx, fx: a.fx, see: a.see },
       seconds: Math.max(2, Math.round((a.src || a.see).length / 14 + dlgLen / 7)),
     };

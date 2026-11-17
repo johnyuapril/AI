@@ -123,6 +123,7 @@ function CutBoard({ p, update, scene, cuts, names }: { p: Project; update: WsPro
           {ai && c.auto.note && <div className="small-t" style={{ color: 'var(--blue)', fontWeight: 700, marginTop: 4 }}>{c.auto.note}</div>}
           {ai && p.cuts[c.key]?.desc && <div className="txt"><b>화면</b> {p.cuts[c.key]!.desc}</div>}
           {c.action && <div className={ai ? 'txt muted small-t' : 'txt'}>{ai ? '대본: ' : ''}{c.action}</div>}
+          {ai && !c.action && !c.dialogues.length && <div className="txt muted small-t">대본: (연결된 대본 없음)</div>}
           {c.dialogues.map((d, k) => <div key={k} className="dl"><b>{d.speaker}{d.off ? '(소리)' : ''}</b> {d.text.length > 80 ? d.text.slice(0, 78) + '…' : d.text}</div>)}
           {i === 0 && cuts.length > 1 && <div className="muted small-t" style={{ marginTop: 4 }}>⠿를 끌어 다른 컷에 놓으면 합쳐져요</div>}
         </div>;
